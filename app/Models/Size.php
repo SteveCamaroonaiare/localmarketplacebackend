@@ -11,7 +11,9 @@ class Size extends Model
         'color_variant_id',
         'name',
         'price',
-        'available'
+        'available',
+        'stock_quantity',
+        'restock_frequency',
     ];
 
     public function product()

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ColorVariant extends Model
 {
-    protected $fillable = ['product_id', 'color_name', 'color_code', 'available'];
+    protected $fillable = ['product_id', 'color_name', 'color_code', 'available', 'stock_quantity', 'restock_frequency' ];
 
     public function images()
     {

@@ -26,3 +26,8 @@ Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories/{id}/products', [ProductController::class, 'byCategory']);
+Route::put('/products/{id}/stock', [ProductController::class, 'updateStock']);
+Route::put('products/restore-stock', [ProductController::class, 'restoreStock']);
+
+Route::get('/products/{product}/reviews', [ReviewController::class, 'index']);
+Route::post('/reviews', [ReviewController::class, 'store'])->middleware('auth:sanctum');
