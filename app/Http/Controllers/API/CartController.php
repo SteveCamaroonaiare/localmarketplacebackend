@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
-    public function store(Request $request)
+public function store(Request $request)
 {
     $request->validate([
         'product_id' => 'required|exists:products,id',
@@ -19,35 +19,47 @@ class CartController extends Controller
     $user = Auth::user();
     $cart = Cart::firstOrCreate(['user_id' => $user->id]);
 
-    $product = Product::with('seller')->findOrFail($request->product_id);
+    // Vérification améliorée de l'article existant
+    $existingItem = $cart->items()
+        ->where('product_id', $request->product_id)
+        ->when($request->color, function($query) use ($request) {
+            return $query->where('color', $request->color);
+        }, function($query) {
+            return $query->whereNull('color');
+        })
+        ->when($request->size, function($query) use ($request) {
+            return $query->where('size', $request->size);
+        }, function($query) {
+            return $query->whereNull('size');
+        })
+        ->first();
 
-    // Récupérer les données du variant si nécessaire
-    $variantData = [];
-    if ($request->product_variant_id) {
-        $variant = ProductVariant::find($request->product_variant_id);
-        $variantData = [
-            'price' => $variant->price,
-            'original_price' => $variant->original_price,
-            'size' => $variant->size,
-        ];
+    if ($existingItem) {
+        $existingItem->update(['quantity' => $existingItem->quantity + $request->quantity]);
+    } else {
+        $cart->items()->create([
+            'product_id' => $request->product_id,
+            'color' => $request->color,
+            'size' => $request->size,
+            'quantity' => $request->quantity
+        ]);
     }
 
-    // Créer l'item du panier avec toutes les données nécessaires
-    $cartItem = $cart->items()->create([
-        'product_id' => $product->id,
-        'product_variant_id' => $request->product_variant_id,
-        'color_variant_id' => $request->color_variant_id,
-        'product_name' => $product->name,
-        'price' => $variantData['price'] ?? $product->price,
-        'original_price' => $variantData['original_price'] ?? $product->original_price,
-        'image' => $product->image,
-        'size' => $variantData['size'] ?? $request->size,
-        'color' => $request->color,
-        'seller' => $product->seller->name,
-        'location' => $product->seller->location,
-        'quantity' => $request->quantity,
-    ]);
-
-    return response()->json($cartItem, 201);
+    return response()->json($cart->load('items.product'), 201);
 }
+
+public function show($id) {
+    $category = Category::with('products')->find($id);
+
+    if (!$category) {
+        return response()->json(['message' => 'Catégorie non trouvée'], 404);
+    }
+
+    return response()->json([
+        'id' => $category->id,
+        'name' => $category->name,
+        'products' => $category->products
+    ]);
+}
+
 }

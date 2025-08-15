@@ -36,13 +36,22 @@ class ProductController extends Controller
 
     // Récupérer les produits par catégorie
     public function byCategory($categoryId)
-    {
-        $products = Product::with('variants')
-            ->where('category_id', $categoryId)
-            ->get();
+{
+    $category = Category::find($categoryId);
 
-        return response()->json($products);
+    if (!$category) {
+        return response()->json(['message' => 'Catégorie non trouvée'], 404);
     }
+
+    $products = Product::with('variants')
+        ->where('category_id', $categoryId)
+        ->get();
+
+    return response()->json([
+        'category' => $category,
+        'products' => $products
+    ]);
+}
 
    // ProductController.php
    public function updateStock(Request $request, $id)
