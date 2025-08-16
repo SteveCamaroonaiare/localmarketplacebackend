@@ -147,4 +147,19 @@ class ProductController extends Controller
 
     return response()->json(['message' => 'Stock restauré']);
 }
+
+public function  similar($productId){
+$product=Product::find($productId);
+if(!$product) {
+    return response()->json(['error' => 'Produit non trouvé'], 404);
+}
+$similarProducts=Product::where('category_id',$product->category_id)
+    ->where('id', '!=', $productId)
+    ->with('variants')
+    ->take(9)  // Limiter à 5 produits similaires
+    ->get();
+    return response()->json($similarProducts);
+}
+
+
 }

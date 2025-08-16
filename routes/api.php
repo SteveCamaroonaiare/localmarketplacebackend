@@ -33,3 +33,5 @@ Route::put('products/restore-stock', [ProductController::class, 'restoreStock'])
 
 Route::get('/products/{product}/reviews', [ReviewController::class, 'index']);
 Route::post('/reviews', [ReviewController::class, 'store'])->middleware('auth:sanctum');
+
+Route::get('/products/{id}/similar', [ProductController::class, 'similar']);
