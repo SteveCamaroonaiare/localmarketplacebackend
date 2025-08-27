@@ -17,6 +17,7 @@ class Product extends Model
         'location',
         'badge',
         'category_id',
+        'sub_category_id',
         'stock_quantity',
         'restock_frequency',
         'return_policy',
@@ -46,4 +47,8 @@ class Product extends Model
     {
         return $this->hasMany(ColorVariant::class);
     }
+    public function subCategory()
+{
+    return $this->belongsTo(SubCategory::class);
+}
 }

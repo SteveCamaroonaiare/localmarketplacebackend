@@ -162,4 +162,15 @@ $similarProducts=Product::where('category_id',$product->category_id)
 }
 
 
+       // Dans votre ProductController.php
+public function featured()
+{
+    $products = Product::with(['subCategory', 'category', 'colorVariants', 'images'])
+        ->where('rating', '>=', 4.0) // ou votre logique pour les produits populaires
+        ->take(20)
+        ->get();
+
+    return response()->json($products);
+}
+
 }

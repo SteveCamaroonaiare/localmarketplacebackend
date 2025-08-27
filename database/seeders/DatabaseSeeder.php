@@ -4,200 +4,487 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Category;
+use App\Models\SubCategory;
 use App\Models\Product;
 use App\Models\ColorVariant;
 use App\Models\Size;
 use App\Models\VariantImage;
+use App\Models\Department;
+
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
     public function run()
     {
-        // 1. Catégories
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        
+        // Nettoyer les tables
+        Category::truncate();
+        SubCategory::truncate();
+        Product::truncate();
+        ColorVariant::truncate();
+        Size::truncate();
+        VariantImage::truncate();
+
+        // 1. Catégories Principales
         $categories = [
-            ['name' => 'Électronique', 'icon' => '📱'],
-            ['name' => 'Mode & Beauté', 'icon' => '👗'],
-            ['name' => 'Maison & Jardin', 'icon' => '🏠'],
-            ['name' => 'Sports & Loisirs', 'icon' => '⚽'],
-            ['name' => 'Alimentation', 'icon' => '🍎'],
-            ['name' => 'Santé & Bien-être', 'icon' => '💊'],
-        ];
-
-        foreach ($categories as $category) {
-            Category::create($category);
-        }
-
-        // 2. Produits avec différentes configurations
-        $products = [
-            // Smartphone avec variantes de couleur et stockage (tailles)
             [
-                'name' => 'Smartphone Samsung Galaxy A54',
-                'description' => 'Très bon téléphone pratique et résistant aux surcharges, batterie max',
-                'price' => '185000.00',
-                'original_price' => '220000.00',
-                'image' => '/assets/samsung.jpg',
-                'rating' => 4.5,
-                'reviews' => 128,
-                'seller' => 'TechStore Douala',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Livraison gratuite',
-                'category_id' => 1,
-                'stock_quantity' => 581,
-                'restock_frequency' => '3 jours',
-                'return_policy' => 1,
-                'payment_on_delivery' => 0,
-                'has_color_variants' => 1,
-                'default_color' => 'Noir',
-                'default_color_code' => '#000000',
-                'variants' => [
+                'name' => 'Électronique & Technologies',
+                'icon' => '📱',
+                'sub_categories' => [
                     [
-                        'color_name' => 'Noir',
-                        'color_code' => '#000000',
-                        'price' => '185000.00',
-                        'original_price' => '220000.00',
-                        'images' => [
-                            '/assets/samsung-noir-1.jpg',
-                            '/assets/samsung-noir-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => '128GB', 'price' => '185000.00','original_price' => '220000.00'],
-                            ['name' => '256GB', 'price' => '210000.00','original_price' => '235000.00'],
-                        ]
+                        'name' => 'Smartphones & Téléphones',
+                        'description' => 'Smartphones, téléphones portables et accessoires',
+                        'image' => '/assets/electronics/phones.jpg'
                     ],
                     [
-                        'color_name' => 'Bleu',
-                        'color_code' => '#0000FF',
-                        'price' => '190000.00',
-                        'original_price' => '225000.00',
-                        'images' => [
-                            '/assets/samsung-bleu-1.jpg',
-                            '/assets/samsung-bleu-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => '128GB', 'price' => '190000.00', 'original_price' => '225000.00',],
-                            ['name' => '256GB', 'price' => '215000.00', 'original_price' => '255000.00',],
-                        ]
+                        'name' => 'Ordinateurs & Accessoires',
+                        'description' => 'PC portables, ordinateurs de bureau, composants',
+                        'image' => '/assets/electronics/computers.jpg'
+                    ],
+                    [
+                        'name' => 'Audio & Écouteurs',
+                        'description' => 'Casques, écouteurs, enceintes Bluetooth',
+                        'image' => '/assets/electronics/audio.jpg'
+                    ],
+                    [
+                        'name' => 'Gaming & Console',
+                        'description' => 'Consoles de jeux, manettes, jeux vidéo',
+                        'image' => '/assets/electronics/gaming.jpg'
                     ]
                 ]
             ],
-            
-            // Chaussures de sport avec tailles
             [
-                'name' => 'Chaussures de sport Nike Air Max',
-                'description' => 'Chaussures confortables pour le sport et le quotidien',
-                'price' => '75000.00',
-                'original_price' => '90000.00',
-                'image' => '/assets/nike.jpg',
-                'rating' => 4.7,
-                'reviews' => 89,
-                'seller' => 'SportPlus',
-                'location' => 'Yaoundé, Cameroun',
-                'badge' => 'Nouvelle collection',
-                'category_id' => 4,
-                'stock_quantity' => 421,
-                'restock_frequency' => '2 semaines',
-                'return_policy' => 1,
-                'payment_on_delivery' => 1,
-                'has_color_variants' => 1,
-                'default_color' => 'Blanc',
-                'default_color_code' => '#FFFFFF',
-                'variants' => [
+                'name' => 'Mode & Vêtements',
+                'icon' => '👗',
+                'sub_categories' => [
                     [
-                        'color_name' => 'Blanc',
-                        'color_code' => '#FFFFFF',
-                        'price' => '75000.00',
-                        'original_price' => '90000.00',
-                        'images' => [
-                            '/assets/nike-blanc-1.jpg',
-                            '/assets/nike-blanc-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => '40', 'price' => '75000.00', 'original_price' => '90000.00',
-],
-                            ['name' => '41', 'price' => '75000.00','original_price' => '90000.00',],
-                            ['name' => '42', 'price' => '76000.00','original_price' => '92000.00',],
-                        ]
+                        'name' => 'Vêtements Hommes',
+                        'description' => 'T-shirts, chemises, pantalons, costumes',
+                        'image' => '/assets/fashion/men-clothing.jpg'
                     ],
                     [
-                        'color_name' => 'Noir',
-                        'color_code' => '#000000',
-                        'price' => '78000.00',
-                        'original_price' => '95000.00',
-                        'images' => [
-                            '/assets/nike-noir-1.jpg',
-                            '/assets/nike-noir-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => '40', 'price' => '78000.00','original_price' => '95000.00',],
-                            ['name' => '41', 'price' => '78000.00','original_price' => '95500.00',],
-                            ['name' => '42', 'price' => '78000.00','original_price' => '96000.00',],
-                        ]
+                        'name' => 'Vêtements Femmes',
+                        'description' => 'Robes, jupes, tops, ensembles',
+                        'image' => '/assets/fashion/women-clothing.jpg'
+                    ],
+                    [
+                        'name' => 'Vêtements Enfants',
+                        'description' => 'Vêtements pour bébés et enfants',
+                        'image' => '/assets/fashion/kids-clothing.jpg'
+                    ],
+                    [
+                        'name' => 'Chaussures',
+                        'description' => 'Chaussures pour hommes, femmes et enfants',
+                        'image' => '/assets/fashion/shoes.jpg'
+                    ],
+                    [
+                        'name' => 'Accessoires Mode',
+                        'description' => 'Sacs, montres, bijoux, ceintures',
+                        'image' => '/assets/fashion/accessories.jpg'
                     ]
                 ]
             ],
-            
-            // Réfrigérateur (sans variantes)
             [
-                'name' => 'Réfrigérateur Samsung 500L',
-                'description' => 'Réfrigérateur intelligent avec technologie Twin Cooling',
-                'price' => '850000.00',
-                'original_price' => '950000.00',
-                'image' => '/assets/fridge.jpg',
-                'rating' => 4.3,
-                'reviews' => 67,
-                'seller' => 'ElectroMax',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Économie d\'énergie',
-                'category_id' => 1,
-                'stock_quantity' => 81,
-                'restock_frequency' => 'Chaque 2 mois',
-                'return_policy' => 1,
-                'payment_on_delivery' => 0,
-                'has_color_variants' => 0,
-                'default_color' => 'Inox',
-                'default_color_code' => '#C0C0C0',
-                'images' => [
-                    '/assets/fridge-1.jpg',
-                    '/assets/fridge-2.jpg',
-                    '/assets/fridge-3.jpg'
+                'name' => 'Maison & Jardin',
+                'icon' => '🏠',
+                'sub_categories' => [
+                    [
+                        'name' => 'Meubles & Décoration',
+                        'description' => 'Canapés, lits, tables, décoration intérieure',
+                        'image' => '/assets/home/furniture.jpg'
+                    ],
+                    [
+                        'name' => 'Électroménager',
+                        'description' => 'Réfrigérateurs, machines à laver, cuisinières',
+                        'image' => '/assets/home/appliances.jpg'
+                    ],
+                    [
+                        'name' => 'Cuisine & Art de la Table',
+                        'description' => 'Ustensiles, vaisselle, appareils de cuisine',
+                        'image' => '/assets/home/kitchen.jpg'
+                    ],
+                    [
+                        'name' => 'Jardin & Extérieur',
+                        'description' => 'Mobilier de jardin, outils, barbecue',
+                        'image' => '/assets/home/garden.jpg'
+                    ]
                 ]
             ],
-            
-            // Robe africaine avec tailles
             [
-                'name' => 'Robe Africaine Traditionnelle',
-                'description' => 'Robe traditionnelle en tissu wax, fait main',
-                'price' => '35000.00',
-                'original_price' => '45000.00',
-                'image' => '/assets/robe.jpg',
-                'rating' => 4.8,
-                'reviews' => 56,
-                'seller' => 'Artisanat Africain',
-                'location' => 'Yaoundé, Cameroun',
-                'badge' => 'Fait main',
-                'category_id' => 2,
-                'stock_quantity' => 151,
-                'restock_frequency' => '1 mois',
-                'return_policy' => 1,
-                'payment_on_delivery' => 1,
-                'has_color_variants' => 0,
-                'default_color' => 'Multicolore',
-                'default_color_code' => null,
-                'sizes' => [
-                    ['name' => 'S', 'price' => '35000.00'],
-                    ['name' => 'M', 'price' => '35000.00'],
-                    ['name' => 'L', 'price' => '36000.00'],
-                    ['name' => 'XL', 'price' => '37000.00'],
+                'name' => 'Beauté & Santé',
+                'icon' => '💄',
+                'sub_categories' => [
+                    [
+                        'name' => 'Cosmétiques & Maquillage',
+                        'description' => 'Produits de beauté, maquillage, soins visage',
+                        'image' => '/assets/beauty/cosmetics.jpg'
+                    ],
+                    [
+                        'name' => 'Soins Corporels',
+                        'description' => 'Crèmes, lotions, produits de douche',
+                        'image' => '/assets/beauty/body-care.jpg'
+                    ],
+                    [
+                        'name' => 'Parfums & Fragrances',
+                        'description' => 'Parfums, eaux de toilette, diffuseurs',
+                        'image' => '/assets/beauty/fragrances.jpg'
+                    ],
+                    [
+                        'name' => 'Santé & Bien-être',
+                        'description' => 'Compléments alimentaires, matériel médical',
+                        'image' => '/assets/beauty/health.jpg'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Sports & Loisirs',
+                'icon' => '⚽',
+                'sub_categories' => [
+                    [
+                        'name' => 'Équipement Sportif',
+                        'description' => 'Matériel de fitness, sports collectifs',
+                        'image' => '/assets/sports/equipment.jpg'
+                    ],
+                    [
+                        'name' => 'Vêtements Sport',
+                        'description' => 'Tenues de sport, chaussures de running',
+                        'image' => '/assets/sports/clothing.jpg'
+                    ],
+                    [
+                        'name' => 'Plein Air & Randonnée',
+                        'description' => 'Tentes, sacs à dos, équipement camping',
+                        'image' => '/assets/sports/outdoor.jpg'
+                    ],
+                    [
+                        'name' => 'Vélos & Accessoires',
+                        'description' => 'Vélos, casques, équipement cyclisme',
+                        'image' => '/assets/sports/bikes.jpg'
+                    ]
+                ]
+            ],
+            [
+                'name' => 'Enfants & Bébés',
+                'icon' => '👶',
+                'sub_categories' => [
+                    [
+                        'name' => 'Jouets & Jeux',
+                        'description' => 'Jouets éducatifs, jeux de société, poupées',
+                        'image' => '/assets/kids/toys.jpg'
+                    ],
+                    [
+                        'name' => 'Puériculture',
+                        'description' => 'Poussettes, sièges auto, articles bébé',
+                        'image' => '/assets/kids/baby-care.jpg'
+                    ],
+                    [
+                        'name' => 'Fournitures Scolaires',
+                        'description' => 'Cartables, cahiers, stylos, calculatrices',
+                        'image' => '/assets/kids/school.jpg'
+                    ]
                 ]
             ]
         ];
 
-        foreach ($products as $productData) {
+        foreach ($categories as $categoryData) {
+            $category = Category::create([
+                'name' => $categoryData['name'],
+                'icon' => $categoryData['icon']
+            ]);
+
+            foreach ($categoryData['sub_categories'] as $subCategoryData) {
+                SubCategory::create([
+                    'name' => $subCategoryData['name'],
+                    'description' => $subCategoryData['description'],
+                    'image' => $subCategoryData['image'],
+                    'category_id' => $category->id
+                ]);
+            }
+        }
+
+        // 2. Produits avec variantes détaillées
+        $productsData = [
+            // ÉLECTRONIQUE - Smartphones
+            [
+                'name' => 'Smartphone Samsung Galaxy S24 Ultra',
+                'description' => 'Flagship Samsung avec écran Dynamic AMOLED 2X, appareil photo 200MP, processeur Snapdragon 8 Gen 3. Parfait pour la photographie professionnelle et le gaming intensif.',
+                'price' => '750000',
+                'original_price' => '850000',
+                'image' => '/assets/products/samsung-s24.jpg',
+                'rating' => 4.8,
+                'reviews' => 342,
+                'seller' => 'TechStore Cameroun',
+                'location' => 'Douala, Cameroun',
+                'badge' => 'Livraison Express',
+                'category_id' => 1,
+                'sub_category_id' => 1,
+                'stock_quantity' => 45,
+                'restock_frequency' => '2 semaines',
+                'return_policy' => true,
+                'payment_on_delivery' => true,
+                'has_color_variants' => true,
+                'default_color' => 'Noir Phantom',
+                'default_color_code' => '#000000',
+                'variants' => [
+                    [
+                        'color_name' => 'Noir Phantom',
+                        'color_code' => '#000000',
+                        'price' => '750000',
+                        'original_price' => '850000',
+                        'stock_quantity' => 20,
+                        'images' => [
+                            '/assets/products/samsung-s24-black-1.jpg',
+                            '/assets/products/samsung-s24-black-2.jpg'
+                        ],
+                        'sizes' => [
+                            ['name' => '256GB', 'price' => '750000', 'original_price' => '850000', 'stock_quantity' => 10],
+                            ['name' => '512GB', 'price' => '820000', 'original_price' => '920000', 'stock_quantity' => 8],
+                            ['name' => '1TB', 'price' => '950000', 'original_price' => '1050000', 'stock_quantity' => 2]
+                        ]
+                    ],
+                    [
+                        'color_name' => 'Bleu Titanium',
+                        'color_code' => '#4682B4',
+                        'price' => '760000',
+                        'original_price' => '860000',
+                        'stock_quantity' => 15,
+                        'images' => [
+                            '/assets/products/samsung-s24-blue-1.jpg',
+                            '/assets/products/samsung-s24-blue-2.jpg'
+                        ],
+                        'sizes' => [
+                            ['name' => '256GB', 'price' => '760000', 'original_price' => '860000', 'stock_quantity' => 8],
+                            ['name' => '512GB', 'price' => '830000', 'original_price' => '930000', 'stock_quantity' => 5],
+                            ['name' => '1TB', 'price' => '960000', 'original_price' => '1060000', 'stock_quantity' => 2]
+                        ]
+                    ]
+                ]
+            ],
+
+            // MODE - Vêtements Hommes
+            [
+                'name' => 'Costume Business Classique Homme',
+                'description' => 'Costume élégant pour occasions professionnelles. Tissu en laine premium, coupe moderne, confort exceptionnel. Idéal pour entretiens et réunions importantes.',
+                'price' => '85000',
+                'original_price' => '120000',
+                'image' => '/assets/products/men-suit.jpg',
+                'rating' => 4.6,
+                'reviews' => 189,
+                'seller' => 'Fashion Elite',
+                'location' => 'Yaoundé, Cameroun',
+                'badge' => 'Top Vente',
+                'category_id' => 2,
+                'sub_category_id' => 5,
+                'stock_quantity' => 78,
+                'restock_frequency' => '1 mois',
+                'return_policy' => true,
+                'payment_on_delivery' => true,
+                'has_color_variants' => true,
+                'default_color' => 'Bleu Navy',
+                'default_color_code' => '#000080',
+                'variants' => [
+                    [
+                        'color_name' => 'Bleu Navy',
+                        'color_code' => '#000080',
+                        'price' => '85000',
+                        'original_price' => '120000',
+                        'stock_quantity' => 30,
+                        'images' => [
+                            '/assets/products/suit-navy-1.jpg',
+                            '/assets/products/suit-navy-2.jpg'
+                        ],
+                        'sizes' => [
+                            ['name' => 'S', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 8],
+                            ['name' => 'M', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 10],
+                            ['name' => 'L', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 7],
+                            ['name' => 'XL', 'price' => '87000', 'original_price' => '122000', 'stock_quantity' => 5]
+                        ]
+                    ],
+                    [
+                        'color_name' => 'Noir Classique',
+                        'color_code' => '#000000',
+                        'price' => '88000',
+                        'original_price' => '125000',
+                        'stock_quantity' => 25,
+                        'images' => [
+                            '/assets/products/suit-black-1.jpg',
+                            '/assets/products/suit-black-2.jpg'
+                        ],
+                        'sizes' => [
+                            ['name' => 'S', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 6],
+                            ['name' => 'M', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 8],
+                            ['name' => 'L', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 7],
+                            ['name' => 'XL', 'price' => '90000', 'original_price' => '127000', 'stock_quantity' => 4]
+                        ]
+                    ]
+                ]
+            ],
+
+            // MAISON - Électroménager
+            [
+                'name' => 'Réfrigérateur Samsung Twin Cooling Plus',
+                'description' => 'Réfrigérateur américain 500L avec technologie Twin Cooling, distributeur d\'eau et de glace, classe énergétique A++. Design élégant et fonctionnalités avancées.',
+                'price' => '650000',
+                'original_price' => '780000',
+                'image' => '/assets/products/fridge-samsung.jpg',
+                'rating' => 4.7,
+                'reviews' => 234,
+                'seller' => 'ElectroHome',
+                'location' => 'Douala, Cameroun',
+                'badge' => 'Économie d\'énergie',
+                'category_id' => 3,
+                'sub_category_id' => 10,
+                'stock_quantity' => 12,
+                'restock_frequency' => '2 mois',
+                'return_policy' => true,
+                'payment_on_delivery' => false,
+                'has_color_variants' => true,
+                'default_color' => 'Inox Brossé',
+                'default_color_code' => '#C0C0C0',
+                'variants' => [
+                    [
+                        'color_name' => 'Inox Brossé',
+                        'color_code' => '#C0C0C0',
+                        'price' => '650000',
+                        'original_price' => '780000',
+                        'stock_quantity' => 8,
+                        'images' => [
+                            '/assets/products/fridge-stainless-1.jpg',
+                            '/assets/products/fridge-stainless-2.jpg'
+                        ],
+                        'sizes' => []
+                    ],
+                    [
+                        'color_name' => 'Noir Mat',
+                        'color_code' => '#333333',
+                        'price' => '670000',
+                        'original_price' => '800000',
+                        'stock_quantity' => 4,
+                        'images' => [
+                            '/assets/products/fridge-black-1.jpg',
+                            '/assets/products/fridge-black-2.jpg'
+                        ],
+                        'sizes' => []
+                    ]
+                ]
+            ],
+
+            // BEAUTÉ - Parfums
+            [
+                'name' => 'Parfum Channel N°5 Eau de Parfum',
+                'description' => 'Parfum iconique aux notes florales-aldéhydées. Flacon collector, sillage exceptionnel, tenue longue durée. Le parfum de légende depuis 1921.',
+                'price' => '125000',
+                'original_price' => '150000',
+                'image' => '/assets/products/chanel-perfume.jpg',
+                'rating' => 4.9,
+                'reviews' => 456,
+                'seller' => 'Luxury Beauty',
+                'location' => 'Yaoundé, Cameroun',
+                'badge' => 'Produit Premium',
+                'category_id' => 4,
+                'sub_category_id' => 16,
+                'stock_quantity' => 25,
+                'restock_frequency' => '3 semaines',
+                'return_policy' => false,
+                'payment_on_delivery' => true,
+                'has_color_variants' => false,
+                'default_color' => 'Ambre',
+                'default_color_code' => '#D4AF37',
+                'variants' => [],
+                'images' => [
+                    '/assets/products/chanel-perfume-1.jpg',
+                    '/assets/products/chanel-perfume-2.jpg',
+                    '/assets/products/chanel-perfume-3.jpg'
+                ]
+            ],
+
+            // SPORTS - Équipement
+            [
+                'name' => 'Tapis de Course Pliable Electrique',
+                'description' => 'Tapis de course motorisé 2.5HP, pliable, écran LCD, 12 programmes automatiques. Parfait pour fitness à domicile, supporte jusqu\'à 120kg.',
+                'price' => '320000',
+                'original_price' => '450000',
+                'image' => '/assets/products/treadmill.jpg',
+                'rating' => 4.5,
+                'reviews' => 167,
+                'seller' => 'Sport Equipment',
+                'location' => 'Douala, Cameroun',
+                'badge' => 'Promo Fitness',
+                'category_id' => 5,
+                'sub_category_id' => 17,
+                'stock_quantity' => 8,
+                'restock_frequency' => '1 mois',
+                'return_policy' => true,
+                'payment_on_delivery' => false,
+                'has_color_variants' => true,
+                'default_color' => 'Noir et Rouge',
+                'default_color_code' => '#FF0000',
+                'variants' => [
+                    [
+                        'color_name' => 'Noir et Rouge',
+                        'color_code' => '#FF0000',
+                        'price' => '320000',
+                        'original_price' => '450000',
+                        'stock_quantity' => 5,
+                        'images' => [
+                            '/assets/products/treadmill-red-1.jpg',
+                            '/assets/products/treadmill-red-2.jpg'
+                        ],
+                        'sizes' => []
+                    ],
+                    [
+                        'color_name' => 'Noir et Bleu',
+                        'color_code' => '#0000FF',
+                        'price' => '325000',
+                        'original_price' => '455000',
+                        'stock_quantity' => 3,
+                        'images' => [
+                            '/assets/products/treadmill-blue-1.jpg',
+                            '/assets/products/treadmill-blue-2.jpg'
+                        ],
+                        'sizes' => []
+                    ]
+                ]
+            ],
+
+            // ENFANTS - Jouets
+            [
+                'name' => 'Set de Construction LEGO City',
+                'description' => 'Set LEGO 1500 pièces avec figurines, véhicules et bâtiments. Développe la créativité et la motricité fine. Âge recommandé: 6-12 ans.',
+                'price' => '45000',
+                'original_price' => '65000',
+                'image' => '/assets/products/lego-set.jpg',
+                'rating' => 4.8,
+                'reviews' => 289,
+                'seller' => 'Toy World',
+                'location' => 'Yaoundé, Cameroun',
+                'badge' => 'Éducatif',
+                'category_id' => 6,
+                'sub_category_id' => 22,
+                'stock_quantity' => 34,
+                'restock_frequency' => '2 semaines',
+                'return_policy' => true,
+                'payment_on_delivery' => true,
+                'has_color_variants' => false,
+                'default_color' => 'Multicolore',
+                'default_color_code' => null,
+                'variants' => [],
+                'images' => [
+                    '/assets/products/lego-1.jpg',
+                    '/assets/products/lego-2.jpg',
+                    '/assets/products/lego-3.jpg'
+                ]
+            ]
+        ];
+
+        // Création des produits
+        foreach ($productsData as $productData) {
             $product = Product::create([
                 'name' => $productData['name'],
                 'description' => $productData['description'],
                 'price' => $productData['price'],
-                'original_price' => $productData['original_price'] ?? null,
+                'original_price' => $productData['original_price'],
                 'image' => $productData['image'],
                 'rating' => $productData['rating'],
                 'reviews' => $productData['reviews'],
@@ -205,23 +492,25 @@ class DatabaseSeeder extends Seeder
                 'location' => $productData['location'],
                 'badge' => $productData['badge'],
                 'category_id' => $productData['category_id'],
+                'sub_category_id' => $productData['sub_category_id'],
                 'stock_quantity' => $productData['stock_quantity'],
-                'restock_frequency' => $productData['restock_frequency'] ?? null,
+                'restock_frequency' => $productData['restock_frequency'],
                 'return_policy' => $productData['return_policy'],
                 'payment_on_delivery' => $productData['payment_on_delivery'],
                 'has_color_variants' => $productData['has_color_variants'],
-                'default_color' => $productData['default_color'] ?? null,
-                'default_color_code' => $productData['default_color_code'] ?? null,
+                'default_color' => $productData['default_color'],
+                'default_color_code' => $productData['default_color_code'],
             ]);
 
             // Gestion des variantes de couleur
-            if ($productData['has_color_variants'] && isset($productData['variants'])) {
+            if ($productData['has_color_variants'] && !empty($productData['variants'])) {
                 foreach ($productData['variants'] as $variantData) {
                     $variant = ColorVariant::create([
                         'product_id' => $product->id,
                         'color_name' => $variantData['color_name'],
                         'color_code' => $variantData['color_code'],
-                        'price' => $variantData['price'] ?? $productData['price'],
+                        'price' => $variantData['price'],
+                        'stock_quantity' => $variantData['stock_quantity'],
                         'available' => true
                     ]);
 
@@ -240,7 +529,8 @@ class DatabaseSeeder extends Seeder
                             'product_id' => $product->id,
                             'color_variant_id' => $variant->id,
                             'name' => $sizeData['name'],
-                            'price' => $sizeData['price'] ?? $variantData['price'] ?? $productData['price'],
+                            'price' => $sizeData['price'],
+                            'stock_quantity' => $sizeData['stock_quantity'],
                             'available' => true
                         ]);
                     }
@@ -257,163 +547,170 @@ class DatabaseSeeder extends Seeder
                     ]);
                 }
             }
-
-            // Tailles globales (pour produits sans variantes de couleur mais avec tailles)
-            if (!$productData['has_color_variants'] && isset($productData['sizes'])) {
-                foreach ($productData['sizes'] as $sizeData) {
-                    Size::create([
-                        'product_id' => $product->id,
-                        'name' => $sizeData['name'],
-                        'price' => $sizeData['price'] ?? $productData['price'],
-                        'available' => true
-                    ]);
-                }
-            }
         }
 
-        // Ajout de produits supplémentaires
+        // 3. Produits supplémentaires pour chaque sous-catégorie
         $additionalProducts = [
+            // Smartphones supplémentaires
             [
-                'name' => 'Sac à Main Cuir Premium',
-                'description' => 'Sac en cuir véritable de haute qualité',
-                'price' => '45000.00',
-                'original_price' => '60000.00',
-                'image' => '/assets/sac.jpg',
-                'rating' => 4.7,
-                'reviews' => 156,
-                'seller' => 'Luxury Bags',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Cuir véritable',
-                'category_id' => 2,
-                'stock_quantity' => 221,
-                'restock_frequency' => '3 semaines',
-                'return_policy' => 1,
-                'payment_on_delivery' => 1,
-                'has_color_variants' => 1,
-                'default_color' => 'Noir',
-                'default_color_code' => '#000000',
-                'variants' => [
-                    [
-                        'color_name' => 'Noir',
-                        'color_code' => '#000000',
-                        'price' => '45000.00',
-                        'original_price' => '60000.00',
-                        'images' => ['/assets/sac-noir.jpg'],
-                        'sizes' => [] // Pas de tailles
-                    ],
-                    [
-                        'color_name' => 'Marron',
-                        'color_code' => '#8B4513',
-                        'price' => '47000.00',
-                        'original_price' => '63000.00',
-                        'images' => ['/assets/sac-marron.jpg'],
-                        'sizes' => [] // Pas de tailles
-                    ]
-                ]
+                'name' => 'iPhone 15 Pro Max 256GB',
+                'price' => '950000',
+                'original_price' => '1100000',
+                'category_id' => 1,
+                'sub_category_id' => 1,
+                'stock_quantity' => 15
             ],
             [
-                'name' => 'Casque Audio Bluetooth',
-                'description' => 'Casque sans fil avec réduction de bruit',
-                'price' => '35000.00',
-                'original_price' => '50000.00',
-                'image' => '/assets/casque.jpg',
-                'rating' => 4.4,
-                'reviews' => 92,
-                'seller' => 'AudioTech',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Réduction de bruit',
+                'name' => 'Xiaomi Redmi Note 13 Pro',
+                'price' => '280000',
+                'original_price' => '350000',
                 'category_id' => 1,
-                'stock_quantity' => 301,
-                'restock_frequency' => '1 semaine',
-                'return_policy' => 1,
-                'payment_on_delivery' => 1,
-                'has_color_variants' => 1,
-                'default_color' => 'Noir',
-                'default_color_code' => '#000000',
-                'variants' => [
-                    [
-                        'color_name' => 'Noir',
-                        'color_code' => '#000000',
-                        'price' => '35000.00',
-                        'original_price' =>'50000.00',
-                        'images' => ['/assets/casque-noir.jpg'],
-                        'sizes' => [] // Pas de tailles
-                    ],
-                    [
-                        'color_name' => 'Blanc',
-                        'color_code' => '#FFFFFF',
-                        'price' => '36000.00',
-                        'original_price' => '52000.00',
-                        'images' => ['/assets/casque-blanc.jpg'],
-                        'sizes' => [] // Pas de tailles
-                    ],
-                    [
-                        'color_name' => 'Bleu',
-                        'color_code' => '#0000FF',
-                        'price' => '36500.00',
-                        'original_price' => '53000.00',
-                        'images' => ['/assets/casque-bleu.jpg'],
-                        'sizes' => [] // Pas de tailles
-                    ]
-                ]
+                'sub_category_id' => 1,
+                'stock_quantity' => 40
+            ],
+
+            // Vêtements supplémentaires
+            [
+                'name' => 'Chemise Homme Coton Premium',
+                'price' => '25000',
+                'original_price' => '35000',
+                'category_id' => 2,
+                'sub_category_id' => 5,
+                'stock_quantity' => 100
+            ],
+            [
+                'name' => 'Robe Soirée Élégante Femme',
+                'price' => '75000',
+                'original_price' => '95000',
+                'category_id' => 2,
+                'sub_category_id' => 6,
+                'stock_quantity' => 25
+            ],
+
+            // Électroménager supplémentaires
+            [
+                'name' => 'Machine à Laver LG 8kg',
+                'price' => '320000',
+                'original_price' => '400000',
+                'category_id' => 3,
+                'sub_category_id' => 10,
+                'stock_quantity' => 18
             ]
         ];
 
         foreach ($additionalProducts as $productData) {
-            $product = Product::create([
+            Product::create([
                 'name' => $productData['name'],
-                'description' => $productData['description'],
+                'description' => 'Produit de qualité premium, livraison rapide partout au Cameroun.',
                 'price' => $productData['price'],
-                'original_price' => $productData['original_price'] ?? null,
-                'image' => $productData['image'],
-                'rating' => $productData['rating'],
-                'reviews' => $productData['reviews'],
-                'seller' => $productData['seller'],
-                'location' => $productData['location'],
-                'badge' => $productData['badge'],
+                'original_price' => $productData['original_price'],
+                'image' => '/placeholder.svg',
+                'rating' => rand(40, 50) / 10,
+                'reviews' => rand(50, 300),
+                'seller' => 'Market237 Store',
+                'location' => 'Douala, Cameroun',
+                'badge' => 'Nouveau',
                 'category_id' => $productData['category_id'],
+                'sub_category_id' => $productData['sub_category_id'],
                 'stock_quantity' => $productData['stock_quantity'],
-                'restock_frequency' => $productData['restock_frequency'] ?? null,
-                'return_policy' => $productData['return_policy'],
-                'payment_on_delivery' => $productData['payment_on_delivery'],
-                'has_color_variants' => $productData['has_color_variants'],
-                'default_color' => $productData['default_color'] ?? null,
-                'default_color_code' => $productData['default_color_code'] ?? null,
+                'restock_frequency' => '1-2 semaines',
+                'return_policy' => true,
+                'payment_on_delivery' => true,
+                'has_color_variants' => false,
+                'default_color' => 'Standard',
+                'default_color_code' => null
             ]);
+        }
 
-            if ($productData['has_color_variants'] && isset($productData['variants'])) {
-                foreach ($productData['variants'] as $variantData) {
-                    $variant = ColorVariant::create([
-                        'product_id' => $product->id,
-                        'color_name' => $variantData['color_name'],
-                        'color_code' => $variantData['color_code'],
-                        'price' => $variantData['price'] ?? $productData['price'],
-                        'available' => true
-                    ]);
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
-                    if (!$productData['has_color_variants'] && isset($productData['images'])) {
-                        foreach ($productData['images'] as $index => $imageUrl) {
-                            VariantImage::create([
-                                'product_id' => $product->id, // Ajoutez ceci
-                                'image_url' => $imageUrl,
-                                'is_main' => ($index === 0) ? 1 : 0
-                            ]);
-                        }
-                    }
+        $this->command->info('Base de données peuplée avec succès!');
+        $this->command->info('Catégories: ' . Category::count());
+        $this->command->info('Sous-catégories: ' . SubCategory::count());
+        $this->command->info('Produits: ' . Product::count());
+        $this->command->info('Variantes: ' . ColorVariant::count());
+    
+    
+        $departments = [
+            ['name' => 'Tout', 'slug' => 'all', 'order' => 0],
+            ['name' => 'Hommes', 'slug' => 'hommes', 'order' => 1],
+            ['name' => 'Femmes', 'slug' => 'femmes', 'order' => 2],
+            ['name' => 'Enfants', 'slug' => 'enfants', 'order' => 3],
+            ['name' => 'Bijoux', 'slug' => 'bijoux', 'order' => 4],
+            ['name' => 'Industrie', 'slug' => 'industrie', 'order' => 5],
+            ['name' => 'Sacs', 'slug' => 'sacs', 'order' => 6],
+            ['name' => 'Électronique', 'slug' => 'electronique', 'order' => 7],
+            ['name' => 'Sport', 'slug' => 'sport', 'order' => 8],
+            ['name' => 'Maison', 'slug' => 'maison', 'order' => 9],
+            ['name' => 'Beauté', 'slug' => 'beaute', 'order' => 10],
+        ];
 
-                    if (isset($variantData['sizes'])) {
-                        foreach ($variantData['sizes'] as $sizeData) {
-                            Size::create([
-                                'product_id' => $product->id,
-                                'color_variant_id' => $variant->id,
-                                'name' => $sizeData['name'],
-                                'price' => $sizeData['price'] ?? $variantData['price'] ?? $productData['price'],
-                                'available' => true
-                            ]);
-                        }
-                    }
-                }
-            }
+        foreach ($departments as $department) {
+            Department::create($department);
+        }
+
+        // Associer les catégories aux départements
+        $this->associateCategories();
+    }
+
+    private function associateCategories()
+    {
+        // Récupérer les départements
+        $hommes = Department::where('slug', 'hommes')->first();
+        $femmes = Department::where('slug', 'femmes')->first();
+        $enfants = Department::where('slug', 'enfants')->first();
+        $bijoux = Department::where('slug', 'bijoux')->first();
+        $electronique = Department::where('slug', 'electronique')->first();
+        $sport = Department::where('slug', 'sport')->first();
+        $maison = Department::where('slug', 'maison')->first();
+        $beaute = Department::where('slug', 'beaute')->first();
+
+        // Récupérer les catégories
+        $vetementsHommes = Category::where('name', 'like', '%Hommes%')->first();
+        $vetementsFemmes = Category::where('name', 'like', '%Femmes%')->first();
+        $vetementsEnfants = Category::where('name', 'like', '%Enfants%')->first();
+        $bijouxCat = Category::where('name', 'like', '%Bijoux%')->first();
+        $electroniqueCat = Category::where('name', 'like', '%Électronique%')->first();
+        $sportCat = Category::where('name', 'like', '%Sport%')->first();
+        $maisonCat = Category::where('name', 'like', '%Maison%')->first();
+        $beauteCat = Category::where('name', 'like', '%Beauté%')->first();
+
+        // Associer les catégories aux départements
+        if ($hommes && $vetementsHommes) {
+            $hommes->categories()->attach($vetementsHommes->id, ['order' => 1]);
+        }
+
+        if ($femmes && $vetementsFemmes) {
+            $femmes->categories()->attach($vetementsFemmes->id, ['order' => 1]);
+        }
+
+        if ($enfants && $vetementsEnfants) {
+            $enfants->categories()->attach($vetementsEnfants->id, ['order' => 1]);
+        }
+
+        if ($bijoux && $bijouxCat) {
+            $bijoux->categories()->attach($bijouxCat->id, ['order' => 1]);
+        }
+
+        if ($electronique && $electroniqueCat) {
+            $electronique->categories()->attach($electroniqueCat->id, ['order' => 1]);
+        }
+
+        if ($sport && $sportCat) {
+            $sport->categories()->attach($sportCat->id, ['order' => 1]);
+        }
+
+        if ($maison && $maisonCat) {
+            $maison->categories()->attach($maisonCat->id, ['order' => 1]);
+        }
+
+        if ($beaute && $beauteCat) {
+            $beaute->categories()->attach($beauteCat->id, ['order' => 1]);
         }
     }
-}
+
+        
+    }
+
+    
+    
