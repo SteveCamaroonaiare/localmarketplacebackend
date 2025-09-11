@@ -148,18 +148,36 @@ class ProductController extends Controller
     return response()->json(['message' => 'Stock restauré']);
 }
 
-public function  similar($productId){
-$product=Product::find($productId);
-if(!$product) {
-    return response()->json(['error' => 'Produit non trouvé'], 404);
-}
-$similarProducts=Product::where('category_id',$product->category_id)
-    ->where('id', '!=', $productId)
-    ->with('variants')
-    ->take(9)  // Limiter à 5 produits similaires
-    ->get();
+public function similar($productId)
+{
+    $product = Product::find($productId);
+    if (!$product) {
+        return response()->json(['error' => 'Produit non trouvé'], 404);
+    }
+
+    $similarProducts = Product::where('category_id', $product->category_id)
+        ->where('id', '!=', $productId)
+        ->with(['variants.images']) // si tu as des images par variante
+        ->take(9)
+        ->get()
+        ->map(function ($p) {
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => $p->price,
+                'originalPrice' => $p->original_price,
+                'rating' => $p->rating ?? 4.5,
+                'reviews' => $p->reviews_count ?? 100,
+                'seller' => $p->seller->name ?? 'Vendeur inconnu',
+                'location' => $p->seller->location ?? 'Maroc',
+                'image' => $p->variants->first()?->images->first()?->url ?? '/placeholder.svg',
+                'badge' => $p->badge ?? null,
+            ];
+        });
+
     return response()->json($similarProducts);
 }
+
 
 
        // Dans votre ProductController.php

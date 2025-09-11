@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/categories/recommended', [CategoryController::class, 'recommended']);
 Route::get('/categories/{id}', [CategoryController::class, 'show']);
 Route::get('/categories/{id}/products', [CategoryController::class, 'byCategory']);
 
@@ -37,7 +38,7 @@ Route::get('/categories/{id}/products', [ProductController::class, 'byCategory']
 Route::put('/products/{id}/stock', [ProductController::class, 'updateStock']);
 Route::put('products/restore-stock', [ProductController::class, 'restoreStock']);
 
-Route::get('/products/{product}/reviews', [ReviewController::class, 'index']);
+Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
 Route::post('/reviews', [ReviewController::class, 'store'])->middleware('auth:sanctum');
 
 Route::get('/products/{id}/similar', [ProductController::class, 'similar']);Route::get('/test', function() {

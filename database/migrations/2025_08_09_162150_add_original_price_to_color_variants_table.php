@@ -20,7 +20,9 @@ return new class extends Migration
      * Reverse the migrations.
      */
     public function down(): void
-    {
-        dropColumn('original_price');
-    }
+{
+    Schema::table('color_variants', function (Blueprint $table) {
+        $table->dropColumn('original_price');
+    });
+}
 };

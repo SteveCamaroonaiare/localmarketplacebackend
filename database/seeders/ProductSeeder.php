@@ -3,210 +3,23 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Category;
-use App\Models\SubCategory;
 use App\Models\Product;
 use App\Models\ColorVariant;
 use App\Models\Size;
 use App\Models\VariantImage;
-use App\Models\Department;
-
 use Illuminate\Support\Facades\DB;
 
-class DatabaseSeeder extends Seeder
+class ProductSeeder extends Seeder
 {
     public function run()
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
-        
-        // Nettoyer les tables
-        Category::truncate();
-        SubCategory::truncate();
         Product::truncate();
         ColorVariant::truncate();
         Size::truncate();
         VariantImage::truncate();
- DB::statement('SET FOREIGN_KEY_CHECKS=0');
-    Department::truncate();
-    DB::table('department_category')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
-        // 1. Catégories Principales
-        $categories = [
-            [
-                'name' => 'Électronique & Technologies',
-                'icon' => '📱',
-                'sub_categories' => [
-                    [
-                        'name' => 'Smartphones & Téléphones',
-                        'description' => 'Smartphones, téléphones portables et accessoires',
-                        'image' => '/assets/electronics/phones.jpg'
-                    ],
-                    [
-                        'name' => 'Ordinateurs & Accessoires',
-                        'description' => 'PC portables, ordinateurs de bureau, composants',
-                        'image' => '/assets/electronics/computers.jpg'
-                    ],
-                    [
-                        'name' => 'Audio & Écouteurs',
-                        'description' => 'Casques, écouteurs, enceintes Bluetooth',
-                        'image' => '/assets/electronics/audio.jpg'
-                    ],
-                    [
-                        'name' => 'Gaming & Console',
-                        'description' => 'Consoles de jeux, manettes, jeux vidéo',
-                        'image' => '/assets/electronics/gaming.jpg'
-                    ]
-                ]
-            ],
-            [
-                'name' => 'Mode & Vêtements',
-                'icon' => '👗',
-                'sub_categories' => [
-                    [
-                        'name' => 'Vêtements Hommes',
-                        'description' => 'T-shirts, chemises, pantalons, costumes',
-                        'image' => '/assets/fashion/men-clothing.jpg'
-                    ],
-                    [
-                        'name' => 'Vêtements Femmes',
-                        'description' => 'Robes, jupes, tops, ensembles',
-                        'image' => '/assets/fashion/women-clothing.jpg'
-                    ],
-                    [
-                        'name' => 'Vêtements Enfants',
-                        'description' => 'Vêtements pour bébés et enfants',
-                        'image' => '/assets/fashion/kids-clothing.jpg'
-                    ],
-                    [
-                        'name' => 'Chaussures',
-                        'description' => 'Chaussures pour hommes, femmes et enfants',
-                        'image' => '/assets/fashion/shoes.jpg'
-                    ],
-                    [
-                        'name' => 'Accessoires Mode',
-                        'description' => 'Sacs, montres, bijoux, ceintures',
-                        'image' => '/assets/fashion/accessories.jpg'
-                    ]
-                ]
-            ],
-            [
-                'name' => 'Maison & Jardin',
-                'icon' => '🏠',
-                'sub_categories' => [
-                    [
-                        'name' => 'Meubles & Décoration',
-                        'description' => 'Canapés, lits, tables, décoration intérieure',
-                        'image' => '/assets/home/furniture.jpg'
-                    ],
-                    [
-                        'name' => 'Électroménager',
-                        'description' => 'Réfrigérateurs, machines à laver, cuisinières',
-                        'image' => '/assets/home/appliances.jpg'
-                    ],
-                    [
-                        'name' => 'Cuisine & Art de la Table',
-                        'description' => 'Ustensiles, vaisselle, appareils de cuisine',
-                        'image' => '/assets/home/kitchen.jpg'
-                    ],
-                    [
-                        'name' => 'Jardin & Extérieur',
-                        'description' => 'Mobilier de jardin, outils, barbecue',
-                        'image' => '/assets/home/garden.jpg'
-                    ]
-                ]
-            ],
-            [
-                'name' => 'Beauté & Santé',
-                'icon' => '💄',
-                'sub_categories' => [
-                    [
-                        'name' => 'Cosmétiques & Maquillage',
-                        'description' => 'Produits de beauté, maquillage, soins visage',
-                        'image' => '/assets/beauty/cosmetics.jpg'
-                    ],
-                    [
-                        'name' => 'Soins Corporels',
-                        'description' => 'Crèmes, lotions, produits de douche',
-                        'image' => '/assets/beauty/body-care.jpg'
-                    ],
-                    [
-                        'name' => 'Parfums & Fragrances',
-                        'description' => 'Parfums, eaux de toilette, diffuseurs',
-                        'image' => '/assets/beauty/fragrances.jpg'
-                    ],
-                    [
-                        'name' => 'Santé & Bien-être',
-                        'description' => 'Compléments alimentaires, matériel médical',
-                        'image' => '/assets/beauty/health.jpg'
-                    ]
-                ]
-            ],
-            [
-                'name' => 'Sports & Loisirs',
-                'icon' => '⚽',
-                'sub_categories' => [
-                    [
-                        'name' => 'Équipement Sportif',
-                        'description' => 'Matériel de fitness, sports collectifs',
-                        'image' => '/assets/sports/equipment.jpg'
-                    ],
-                    [
-                        'name' => 'Vêtements Sport',
-                        'description' => 'Tenues de sport, chaussures de running',
-                        'image' => '/assets/sports/clothing.jpg'
-                    ],
-                    [
-                        'name' => 'Plein Air & Randonnée',
-                        'description' => 'Tentes, sacs à dos, équipement camping',
-                        'image' => '/assets/sports/outdoor.jpg'
-                    ],
-                    [
-                        'name' => 'Vélos & Accessoires',
-                        'description' => 'Vélos, casques, équipement cyclisme',
-                        'image' => '/assets/sports/bikes.jpg'
-                    ]
-                ]
-            ],
-            [
-                'name' => 'Enfants & Bébés',
-                'icon' => '👶',
-                'sub_categories' => [
-                    [
-                        'name' => 'Jouets & Jeux',
-                        'description' => 'Jouets éducatifs, jeux de société, poupées',
-                        'image' => '/assets/kids/toys.jpg'
-                    ],
-                    [
-                        'name' => 'Puériculture',
-                        'description' => 'Poussettes, sièges auto, articles bébé',
-                        'image' => '/assets/kids/baby-care.jpg'
-                    ],
-                    [
-                        'name' => 'Fournitures Scolaires',
-                        'description' => 'Cartables, cahiers, stylos, calculatrices',
-                        'image' => '/assets/kids/school.jpg'
-                    ]
-                ]
-            ]
-        ];
-
-        foreach ($categories as $categoryData) {
-            $category = Category::create([
-                'name' => $categoryData['name'],
-                'icon' => $categoryData['icon']
-            ]);
-
-            foreach ($categoryData['sub_categories'] as $subCategoryData) {
-                SubCategory::create([
-                    'name' => $subCategoryData['name'],
-                    'description' => $subCategoryData['description'],
-                    'image' => $subCategoryData['image'],
-                    'category_id' => $category->id
-                ]);
-            }
-        }
-
-        // 2. Produits avec variantes détaillées
         $productsData = [
             // ÉLECTRONIQUE - Smartphones
             [
@@ -493,7 +306,6 @@ class DatabaseSeeder extends Seeder
             ]
         ];
 
-        // Création des produits
         foreach ($productsData as $productData) {
             $product = Product::create([
                 'name' => $productData['name'],
@@ -510,16 +322,15 @@ class DatabaseSeeder extends Seeder
                 'sub_category_id' => $productData['sub_category_id'],
                 'stock_quantity' => $productData['stock_quantity'],
                 'restock_frequency' => $productData['restock_frequency'],
-                 'sexe' => $productData['sexe'] ?? null, 
-                'age_group' => $productData['age_group'] ?? null,
                 'return_policy' => $productData['return_policy'],
                 'payment_on_delivery' => $productData['payment_on_delivery'],
                 'has_color_variants' => $productData['has_color_variants'],
                 'default_color' => $productData['default_color'],
                 'default_color_code' => $productData['default_color_code'],
+                'sexe' => $productData['sexe'],
+                'age_group' => $productData['age_group'],
             ]);
 
-            // Gestion des variantes de couleur
             if ($productData['has_color_variants'] && !empty($productData['variants'])) {
                 foreach ($productData['variants'] as $variantData) {
                     $variant = ColorVariant::create([
@@ -531,7 +342,6 @@ class DatabaseSeeder extends Seeder
                         'available' => true
                     ]);
 
-                    // Images pour la variante
                     foreach ($variantData['images'] as $index => $imageUrl) {
                         VariantImage::create([
                             'color_variant_id' => $variant->id,
@@ -540,7 +350,6 @@ class DatabaseSeeder extends Seeder
                         ]);
                     }
 
-                    // Tailles pour la variante
                     foreach ($variantData['sizes'] as $sizeData) {
                         Size::create([
                             'product_id' => $product->id,
@@ -553,199 +362,9 @@ class DatabaseSeeder extends Seeder
                     }
                 }
             }
-
-            // Images pour produits sans variantes
-            if (!$productData['has_color_variants'] && isset($productData['images'])) {
-                foreach ($productData['images'] as $index => $imageUrl) {
-                    VariantImage::create([
-                        'product_id' => $product->id,
-                        'image_url' => $imageUrl,
-                        'is_main' => ($index === 0) ? 1 : 0
-                    ]);
-                }
-            }
         }
 
-        // 3. Produits supplémentaires pour chaque sous-catégorie
-        $additionalProducts = [
-            // Smartphones supplémentaires
-            [
-                'name' => 'iPhone 15 Pro Max 256GB',
-                'price' => '950000',
-                'original_price' => '1100000',
-                'category_id' => 1,
-                'sub_category_id' => 1,
-                'stock_quantity' => 15,
-                 'sexe' => null, 
-                'age_group' => null,
-            ],
-            [
-                'name' => 'Xiaomi Redmi Note 13 Pro',
-                'price' => '280000',
-                'original_price' => '350000',
-                'category_id' => 1,
-                'sub_category_id' => 1,
-                'stock_quantity' => 40,
-                 'sexe' => null, 
-                'age_group' => null,
-            ],
-
-            // Vêtements supplémentaires
-            [
-                'name' => 'Chemise Homme Coton Premium',
-                'price' => '25000',
-                'original_price' => '35000',
-                'category_id' => 2,
-                'sub_category_id' => 5,
-                'stock_quantity' => 100,
-                 'sexe' => 'H', 
-                'age_group' => null,
-            ],
-            [
-                'name' => 'Robe Soirée Élégante Femme',
-                'price' => '75000',
-                'original_price' => '95000',
-                'category_id' => 2,
-                'sub_category_id' => 6,
-                'stock_quantity' => 25,
-                'sexe' => 'F', // FEMME
-                'age_group' => 'adult', // ADULTE
-            ],
-             [
-                'name' => 'Chemise Homme Coton Premium',
-                'price' => '25000',
-                'original_price' => '35000',
-                'category_id' => 3,
-                'sub_category_id' => 6,
-                'stock_quantity' => 100,
-                'sexe' => 'H', // HOMME
-                'age_group' => 'adult', // ADULTE
-            ],
-          
-            [
-                'name' => 'T-shirt Enfant Batman',
-                'price' => '15000',
-                'original_price' => '20000',
-                'category_id' => 6,
-                'sub_category_id' => 7,
-                'stock_quantity' => 50,
-                'sexe' => 'H', // MIXTE
-                'age_group' => 'child', // ENFANT
-            ],
-
-
-            // Électroménager supplémentaires
-            [
-                'name' => 'Machine à Laver LG 8kg',
-                'price' => '320000',
-                'original_price' => '400000',
-                'category_id' => 3,
-                'sub_category_id' => 10,
-                'stock_quantity' => 18,
-                 'sexe' => null, 
-                'age_group' => null,
-                
-            ]
-        ];
-
-        foreach ($additionalProducts as $productData) {
-            Product::create([
-                'name' => $productData['name'],
-                'description' => 'Produit de qualité premium, livraison rapide partout au Cameroun.',
-                'price' => $productData['price'],
-                'original_price' => $productData['original_price'],
-                'image' => '/placeholder.svg',
-                'rating' => rand(40, 50) / 10,
-                'reviews' => rand(50, 300),
-                'seller' => 'Market237 Store',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Nouveau',
-                'category_id' => $productData['category_id'],
-                'sub_category_id' => $productData['sub_category_id'],
-                'stock_quantity' => $productData['stock_quantity'],
-                'sexe' => $productData['sexe'] ,
-                'age_group' => $productData['age_group'] ,
-                'restock_frequency' => '1-2 semaines',
-                'return_policy' => true,
-                'payment_on_delivery' => true,
-                'has_color_variants' => false,
-                'default_color' => 'Standard',
-                'default_color_code' => null
-            ]);
-        }
-
-        DB::statement('SET FOREIGN_KEY_CHECKS=1');
-
-        $this->command->info('Base de données peuplée avec succès!');
-        $this->command->info('Catégories: ' . Category::count());
-        $this->command->info('Sous-catégories: ' . SubCategory::count());
-        $this->command->info('Produits: ' . Product::count());
-        $this->command->info('Variantes: ' . ColorVariant::count());
-    
-    
-  $departments = [
-        ['name' => 'Tout', 'slug' => 'all', 'order' => 0, 'active' => 1],
-        ['name' => 'Hommes', 'slug' => 'hommes', 'order' => 1, 'active' => 1],
-        ['name' => 'Femmes', 'slug' => 'femmes', 'order' => 2, 'active' => 1],
-        ['name' => 'Enfants', 'slug' => 'enfants', 'order' => 3, 'active' => 1],
-        ['name' => 'Bijoux', 'slug' => 'bijoux', 'order' => 4, 'active' => 1],
-        ['name' => 'Électronique', 'slug' => 'electronique', 'order' => 5, 'active' => 1],
-        ['name' => 'Sport', 'slug' => 'sport', 'order' => 6, 'active' => 1],
-        ['name' => 'Maison', 'slug' => 'maison', 'order' => 7, 'active' => 1],
-        ['name' => 'Beauté', 'slug' => 'beaute', 'order' => 8, 'active' => 1],
-    ];
-
-    foreach ($departments as $department) {
-        Department::create($department);
-    }
-
-    // Associer les catégories aux départements
-    $this->associateCategories();
-}
-
-private function associateCategories()
-{
-    // Récupérer tous les départements
-    $departments = Department::where('slug', '!=', 'all')->get()->keyBy('slug');
-    
-    // Récupérer toutes les catégories
-    $categories = Category::all()->keyBy('name');
-
-    // Mapping COMPLET entre départements et catégories
-    $mapping = [
-        'hommes' => ['Beauté & Santé'],
-        'femmes' => ['Beauté & Santé', 'Bijoux'],
-        'enfants' => ['Enfants & Bébés'],
-        'bijoux' => ['Bijoux'],
-        'electronique' => ['Électronique & Technologies'],
-        'sport' => ['Sports & Loisirs'],
-        'maison' => ['Maison & Jardin'],
-        'beaute' => ['Beauté & Santé'],
-    ];
-
-    foreach ($mapping as $deptSlug => $categoryNames) {
-        $department = $departments[$deptSlug] ?? null;
-        if (!$department) {
-            echo "Département $deptSlug non trouvé!\n";
-            continue;
-        }
-        
-        foreach ($categoryNames as $index => $categoryName) {
-            $category = $categories[$categoryName] ?? null;
-            if (!$category) {
-                echo "Catégorie $categoryName non trouvée!\n";
-                continue;
-            }
-            
-            // Associer la catégorie au département
-            $department->categories()->attach($category->id, ['order' => $index + 1]);
-            echo "Associé: {$department->name} -> {$category->name}\n";
-        }
+        $this->command->info('Produits créés: ' . Product::count());
+        $this->command->info('Variantes créées: ' . ColorVariant::count());
     }
 }
-
-        
-    }
-
-    
-    

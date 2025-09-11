@@ -20,45 +20,44 @@ class DepartmentController extends Controller
         return response()->json($departments);
     }
 
-    // Récupérer un département spécifique avec ses catégories
-    public function show($slug)
+public function show($slug)
     {
-        $department = Department::where('slug', $slug)
-                                ->with(['categories' => function($query) {
-                                    $query->orderBy('department_category.order');
-                                }])
-                                ->first();
-
-        if (!$department) {
-            return response()->json(['message' => 'Département non trouvé'], 404);
-        }
-
+        $department = Department::with('categories')->where('slug', $slug)->firstOrFail();
         return response()->json($department);
     }
 
-    // Récupérer les produits d'un département
-    public function products($slug)
-    {
-        $department = Department::where('slug', $slug)->first();
+   public function products(Request $request, $slug)
+{
+    $department = Department::with('categories')->where('slug', $slug)->firstOrFail();
+    
+    // Récupérer les IDs des catégories liées à ce département
+    $categoryIds = $department->categories->pluck('id');
+    
+    // Produits qui appartiennent à ces catégories
+    $query = Product::whereHas('categories', function($q) use ($categoryIds) {
+        $q->whereIn('categories.id', $categoryIds);
+    });
 
-        if (!$department) {
-            return response()->json(['message' => 'Département non trouvé'], 404);
-        }
-
-        // Récupérer les IDs des catégories du département
-        $categoryIds = $department->categories->pluck('id');
-
-        // Récupérer les produits de ces catégories
-        $products = Product::with(['category', 'subCategory', 'colorVariants', 'images'])
-                          ->whereIn('category_id', $categoryIds)
-                          ->orderBy('created_at', 'desc')
-                          ->paginate(20);
-
-        return response()->json([
-            'department' => $department,
-            'products' => $products
-        ]);
+    // Filtrage supplémentaire basé sur le département
+    if ($slug === 'hommes') {
+        $query->forMen();
+    } elseif ($slug === 'femmes') {
+        $query->forWomen();
+    } elseif ($slug === 'enfants') {
+        $query->forChildren();
     }
+
+    if ($request->has('category_id')) {
+        $query->where('category_id', $request->input('category_id'));
+    }
+
+    $products = $query->paginate(20);
+
+    return response()->json([
+        'products' => $products
+    ]);
+}
+    
 
     // Récupérer toutes les catégories avec leurs départements
     public function categoriesWithDepartments()

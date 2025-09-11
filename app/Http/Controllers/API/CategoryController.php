@@ -20,6 +20,28 @@ class CategoryController extends Controller
         return response()->json($categories);
     }
 
+
+    public function recommended()
+    {
+        $categories = Category::with(['subCategories' => function($q) {
+            $q->withCount('products')
+              ->with(['products' => function($p) {
+                  $p->take(10);
+              }])
+              ->has('products', '>', 0)
+              ->orderBy('id', 'asc');
+        }])->get();
+
+        // Garder uniquement UNE sous-catégorie par catégorie
+        $categories = $categories->map(function ($category) {
+            if ($category->subCategories->isNotEmpty()) {
+                $category->setRelation('subCategories', collect([$category->subCategories->first()]));
+            }
+            return $category;
+        });
+
+        return response()->json($categories);
+    }
     // Récupérer une catégorie spécifique avec ses sous-catégories
     public function show($id)
     {

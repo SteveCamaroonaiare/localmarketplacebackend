@@ -19,6 +19,8 @@ class Product extends Model
         'category_id',
         'sub_category_id',
         'stock_quantity',
+        'sexe',
+        'age_group',
         'restock_frequency',
         'return_policy',
         'payment_on_delivery'
@@ -51,4 +53,29 @@ class Product extends Model
 {
     return $this->belongsTo(SubCategory::class);
 }
+public function categories()
+{
+    return $this->belongsToMany(Category::class, 'category_product');
+}
+// Scope pour faciliter les requêtes
+public function scopeForMen($query)
+{
+    return $query->where('sexe', 'H')->where('age_group', 'adult');
+}
+
+public function scopeForWomen($query)
+{
+    return $query->where('sexe', 'F')->where('age_group', 'adult');
+}
+
+public function scopeForChildren($query)
+{
+    return $query->where('age_group', 'child');
+}
+
+public function scopeForAdults($query)
+{
+    return $query->where('age_group', 'adult');
+}
+
 }

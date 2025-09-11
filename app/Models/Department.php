@@ -16,8 +16,11 @@ class Department extends Model
                     ->withTimestamps();
     }
 
-    public function products()
-    {
-        return $this->hasManyThrough(Product::class, Category::class);
-    }
+    // Produits via les catégories du département
+public function products()
+{
+    return $this->belongsToMany(Product::class, 'department_category', 'department_id', 'category_id')
+        ->withPivot('order')
+        ->orderBy('department_category.order');
+}
 }
