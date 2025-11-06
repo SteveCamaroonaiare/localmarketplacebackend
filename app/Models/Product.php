@@ -23,7 +23,8 @@ class Product extends Model
         'age_group',
         'restock_frequency',
         'return_policy',
-        'payment_on_delivery'
+        'payment_on_delivery',
+        'merchant_id'
     ];
 
     public function category()
@@ -78,4 +79,14 @@ public function scopeForAdults($query)
     return $query->where('age_group', 'adult');
 }
 
+
+public function promotions()
+{
+    return $this->hasMany(Promotion::class, 'product_id');
+}
+
+    public function merchant()
+    {
+        return $this->belongsTo(Merchant::class);
+    }
 }

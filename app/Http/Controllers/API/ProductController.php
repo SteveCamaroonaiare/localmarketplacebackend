@@ -191,4 +191,30 @@ public function featured()
     return response()->json($products);
 }
 
+// ProductController.php
+public function promotionalProducts()
+{
+    // on suppose que tu as `price` et `original_price` dans ta table products
+    $products = Product::with('variants', 'category')
+        ->whereColumn('price', '<', 'original_price') // produit en réduction
+        ->get()
+        ->filter(function ($product) {
+            // calcul du % réduction
+            $discount = (($product->original_price - $product->price) / $product->original_price) * 100;
+            return $discount >= 10 && $discount <= 70;
+        })
+        ->values(); // réindexer la collection
+
+    return response()->json($products);
+}
+// app/Http/Controllers/API/ProductController.php
+public function promotions()
+{
+    // Récupère uniquement les produits ayant une réduction entre 10% et 70%
+    $products = Product::whereRaw('(original_price - price) / original_price * 100 BETWEEN 10 AND 70')
+                       ->get();
+
+    return response()->json($products);
+}
+
 }
