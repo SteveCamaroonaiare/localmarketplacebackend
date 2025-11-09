@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Merchant;
 use App\Models\Product;
-use App\Models\Order; // ✅ Maintenant on peut l'utiliser
+use App\Models\Order;
 use Illuminate\Support\Facades\Log;
 
 class MerchantDashboardController extends Controller
@@ -17,14 +17,40 @@ class MerchantDashboardController extends Controller
             Log::info('🔍 === DÉBUT DEBUG DASHBOARD ===');
             
             $authenticatedUser = $request->user();
-            $merchant = Merchant::where('email', $authenticatedUser->email)->first();
+            
+            if (!$authenticatedUser) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Utilisateur non authentifié',
+                ], 401);
+            }
+
+            Log::info('👤 Utilisateur authentifié:', [
+                'id' => $authenticatedUser->id,
+                'type' => get_class($authenticatedUser),
+                'email' => $authenticatedUser->email
+            ]);
+
+            // Vérifier si c'est un Merchant ou un User
+            if ($authenticatedUser instanceof \App\Models\Merchant) {
+                $merchant = $authenticatedUser;
+            } else {
+                // Si c'est un User, trouver le Merchant associé
+                $merchant = Merchant::where('user_id', $authenticatedUser->id)->first();
+            }
 
             if (!$merchant) {
+                Log::error('❌ Aucun merchant trouvé pour l\'utilisateur:', ['user_id' => $authenticatedUser->id]);
                 return response()->json([
                     'success' => false,
                     'error' => 'Aucun profil marchand trouvé',
                 ], 404);
             }
+
+            Log::info('🏪 Merchant trouvé:', [
+                'merchant_id' => $merchant->id,
+                'merchant_email' => $merchant->email
+            ]);
 
             // ✅ Maintenant on peut utiliser Order
             $totalProducts = Product::where('merchant_id', $merchant->id)->count();
@@ -46,7 +72,7 @@ class MerchantDashboardController extends Controller
                         'customer' => $order->customer_name,
                         'product' => $order->items->first()->product_name ?? 'N/A',
                         'amount' => $order->total_price,
-                        'status' => $order->status_badge['text'],
+                        'status' => $this->getStatusBadge($order->status),
                     ];
                 });
 
@@ -101,5 +127,20 @@ class MerchantDashboardController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function getStatusBadge($status)
+    {
+        $statuses = [
+            'pending' => ['text' => 'En attente', 'color' => 'warning'],
+            'confirmed' => ['text' => 'Confirmée', 'color' => 'info'],
+            'processing' => ['text' => 'En traitement', 'color' => 'primary'],
+            'shipped' => ['text' => 'Expédiée', 'color' => 'secondary'],
+            'delivered' => ['text' => 'Livrée', 'color' => 'success'],
+            'cancelled' => ['text' => 'Annulée', 'color' => 'danger'],
+            'refunded' => ['text' => 'Remboursée', 'color' => 'dark'],
+        ];
+
+        return $statuses[$status] ?? ['text' => 'Inconnu', 'color' => 'secondary'];
     }
 }

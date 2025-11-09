@@ -10,6 +10,7 @@ use App\Models\ColorVariant;
 use App\Models\Size;
 use App\Models\VariantImage;
 use App\Models\Department;
+use App\Models\SubscriptionPlan; 
 
 use Illuminate\Support\Facades\DB;
 
@@ -26,9 +27,9 @@ class DatabaseSeeder extends Seeder
         ColorVariant::truncate();
         Size::truncate();
         VariantImage::truncate();
- DB::statement('SET FOREIGN_KEY_CHECKS=0');
-    Department::truncate();
-    DB::table('department_category')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            Department::truncate();
+        DB::table('department_category')->truncate();
 
         // 1. Catégories Principales
         $categories = [
@@ -700,6 +701,60 @@ class DatabaseSeeder extends Seeder
 
     // Associer les catégories aux départements
     $this->associateCategories();
+
+
+
+    
+
+    $plans = [
+            [
+                'name' => 'Starter',
+                'slug' => 'starter',
+                'description' => 'Parfait pour débuter sur la plateforme',
+                'monthly_price' => 5000,
+                'yearly_price' => 50000,
+                'product_limit' => 10,
+                'order_limit' => 50,
+                'commission_rate' => 5.0,
+                'features' => ['10 produits', '50 commandes/mois', 'Support email'],
+                'is_popular' => false,
+                'sort_order' => 1,
+            ],
+            [
+                'name' => 'Pro',
+                'slug' => 'pro',
+                'description' => 'Idéal pour les vendeurs actifs',
+                'monthly_price' => 15000,
+                'yearly_price' => 150000,
+                'product_limit' => 100,
+                'order_limit' => 500,
+                'commission_rate' => 3.0,
+                'features' => ['100 produits', '500 commandes/mois', 'Support prioritaire', 'Analyses avancées'],
+                'is_popular' => true,
+                'sort_order' => 2,
+            ],
+            [
+                'name' => 'Enterprise',
+                'slug' => 'enterprise',
+                'description' => 'Pour les boutiques à fort volume',
+                'monthly_price' => 30000,
+                'yearly_price' => 300000,
+                'product_limit' => 0, // Illimité
+                'order_limit' => 0, // Illimité
+                'commission_rate' => 1.5,
+                'features' => ['Produits illimités', 'Commandes illimitées', 'Support 24/7', 'API accès', 'Personnalisation'],
+                'is_popular' => false,
+                'sort_order' => 3,
+            ],
+        ];
+
+        foreach ($plans as $plan) {
+            SubscriptionPlan::create($plan);
+        }
+
+
+
+
 }
 
 private function associateCategories()

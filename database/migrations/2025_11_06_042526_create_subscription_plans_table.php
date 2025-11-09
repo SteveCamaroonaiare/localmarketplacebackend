@@ -33,8 +33,8 @@ return new class extends Migration
             $table->enum('status', ['active', 'canceled', 'past_due', 'unpaid', 'incomplete'])->default('active');
             $table->enum('billing_cycle', ['monthly', 'yearly']);
             $table->decimal('amount', 12, 2);
-            $table->timestamp('starts_at');
-            $table->timestamp('ends_at');
+            $table->timestamp('starts_at')->nullable();
+            $table->timestamp('ends_at')->nullable();
             $table->timestamp('trial_ends_at')->nullable();
             $table->timestamp('canceled_at')->nullable();
             $table->timestamps();

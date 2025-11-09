@@ -11,7 +11,11 @@ use App\Http\Controllers\API\ReviewController;
 use App\Http\Controllers\API\MerchantAuthController;
 use App\Http\Controllers\API\MerchantDashboardController;
 use App\Http\Controllers\API\OrderController;
-
+ use App\Http\Controllers\API\SubscriptionController;   
+ use App\Http\Controllers\API\FinanceController;    
+ use App\Http\Controllers\API\MerchantProductController;  
+ use App\Http\Controllers\API\AdminProductController;   
+  
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -133,3 +137,84 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
+// Dans api.php
+
+// Dans api.php
+
+Route::middleware('auth:sanctum')->group(function () {
+    
+    // Routes finances
+    Route::prefix('merchant/finances')->group(function () {
+        Route::get('/stats', [FinanceController::class, 'getFinancialStats']);
+        Route::get('/monthly-revenue', [FinanceController::class, 'getMonthlyRevenue']);
+        Route::get('/transactions', [FinanceController::class, 'getTransactions']);
+        Route::get('/payouts', [FinanceController::class, 'getPayoutHistory']); // Nouvelle route
+    });
+
+    // Routes d'abonnement
+    Route::prefix('merchant/subscription')->group(function () {
+        Route::get('/plans', [SubscriptionController::class, 'getPlans']);
+        Route::get('/current', [SubscriptionController::class, 'getCurrentSubscription']);
+        Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
+        Route::post('/cancel', [SubscriptionController::class, 'cancelSubscription']);
+        Route::get('/payment-history', [SubscriptionController::class, 'getPaymentHistory']);
+    });
+});
+
+
+Route::get('/debug/transactions', function(Request $request) {
+    try {
+        $merchant = $request->user();
+        \Log::info('Debug transactions for merchant:', ['id' => $merchant->id]);
+        
+        // Test chaque partie
+        $sales = \App\Models\Order::where('merchant_id', $merchant->id)->get();
+        \Log::info('Sales count:', ['count' => $sales->count()]);
+        
+        $subscriptions = \App\Models\SubscriptionPayment::whereHas('subscription', function($q) use ($merchant) {
+            $q->where('merchant_id', $merchant->id);
+        })->get();
+        \Log::info('Subscriptions count:', ['count' => $subscriptions->count()]);
+        
+        return response()->json([
+            'sales' => $sales->count(),
+            'subscriptions' => $subscriptions->count()
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Debug error:', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+})->middleware('auth:sanctum');
+
+
+Route::middleware('auth:sanctum')->prefix('merchant')->group(function () {
+    
+    // Produits du merchant
+    Route::prefix('products')->group(function () {
+        Route::get('/', [MerchantProductController::class, 'index']); // Liste
+        Route::post('/', [MerchantProductController::class, 'store']); // Créer
+        Route::get('/stats', [MerchantProductController::class, 'stats']); // Statistiques
+        Route::get('/{id}', [MerchantProductController::class, 'show']); // Détails
+        Route::put('/{id}', [MerchantProductController::class, 'update']); // Modifier
+        Route::delete('/{id}', [MerchantProductController::class, 'destroy']); // Supprimer
+    });
+});
+
+// ========================================
+// ROUTES ADMIN - Validation des produits
+// ========================================
+Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    
+    // Gestion des produits
+    Route::prefix('products')->group(function () {
+        Route::get('/pending', [AdminProductController::class, 'pendingProducts']); // En attente
+        Route::get('/all', [AdminProductController::class, 'allProducts']); // Tous les produits
+        Route::get('/stats', [AdminProductController::class, 'stats']); // Statistiques
+        
+        // Actions de validation
+        Route::post('/{id}/approve', [AdminProductController::class, 'approveProduct']); // Approuver
+        Route::post('/{id}/reject', [AdminProductController::class, 'rejectProduct']); // Rejeter
+        Route::patch('/{id}/toggle-status', [AdminProductController::class, 'toggleStatus']); // Activer/Désactiver
+    });
+});
