@@ -54,7 +54,7 @@ class GoogleAuthController extends Controller
             }
 
             // Créer un token d'authentification
-            $token = $user->createToken('market237-token')->plainTextToken;
+            $token = $user->createToken('auth_token')->plainTextToken;
 
             // Construire l'URL de redirection vers le frontend avec les données
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
@@ -114,7 +114,7 @@ class GoogleAuthController extends Controller
                 ]);
             }
 
-            $token = $user->createToken('market237-token')->plainTextToken;
+            $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'success' => true,

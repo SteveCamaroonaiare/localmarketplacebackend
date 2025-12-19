@@ -8,25 +8,34 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB; 
 
 class AuthController extends Controller
 {
     /**
      * Inscription d'un nouvel utilisateur
      */
+    
     public function register(Request $request)
     {
+        DB::beginTransaction();
+        
         try {
+            Log::info('=== DÉBUT INSCRIPTION ===');
+            Log::info('Données reçues:', $request->all());
+
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users',
                 'phone' => 'required|string|max:20|unique:users',
                 'password' => 'required|string|min:8|confirmed',
-                'role' => 'required|in:client,merchant', // ✅ AJOUTÉ
+                'role' => 'required|in:client,merchant',
             ]);
 
-
             if ($validator->fails()) {
+                Log::warning('❌ Erreur validation:', $validator->errors()->toArray());
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => 'Erreur de validation',
@@ -34,16 +43,32 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            $user = User::create([
+            Log::info('✅ Validation passée');
+
+            // Vérifier si la table users a les bons champs
+            $userData = [
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'password' => Hash::make($request->password),
-                'role' => $request->role, // ✅ AJOUTÉ
-                'avatar' => $this->generateAvatar($request->name),
-            ]);
+                'role' => $request->role,
+                'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($request->name) . '&color=FFFFFF&background=FFEAA7',
+                'wallet_balance' => 0.00,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
 
-            $token = $user->createToken('market237-token')->plainTextToken;
+            Log::info('Données utilisateur préparées:', $userData);
+
+            $user = User::create($userData);
+            Log::info('✅ Utilisateur créé - ID: ' . $user->id);
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+            Log::info('✅ Token créé');
+
+            DB::commit();
+
+            Log::info('=== INSCRIPTION RÉUSSIE ===');
 
             return response()->json([
                 'success' => true,
@@ -63,10 +88,13 @@ class AuthController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            \Log::error('Erreur inscription: ' . $e->getMessage());
+            DB::rollBack();
+            Log::error('❌ ERREUR CRITIQUE inscription: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur interne du serveur'
+                'message' => 'Erreur interne du serveur: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -104,7 +132,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Utilisateur introuvable'], 404);
         }
 
-            $token = $user->createToken('market237-token')->plainTextToken;
+            $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
                 'success' => true,

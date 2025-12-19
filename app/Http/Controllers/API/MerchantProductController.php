@@ -71,6 +71,7 @@ class MerchantProductController extends Controller
                 'stock_quantity' => 'required|integer|min:0',
                 'category_id' => 'required|exists:categories,id',
                 'sub_category_id' => 'nullable|exists:sub_categories,id',
+                'department_id' => 'required|exists:departments,id',
                 'payment_on_delivery' => 'nullable|boolean',
                 // 'return_policy' supprimé car c'est un boolean dans la table, pas du texte
                 'images' => 'required|array|min:1|max:5',
@@ -105,6 +106,7 @@ class MerchantProductController extends Controller
                 'stock_quantity' => $validated['stock_quantity'],
                 'category_id' => $validated['category_id'],
                 'sub_category_id' => $validated['sub_category_id'] ?? null,
+                'department_id' => $validated['department_id'], 
                 'status' => 'pending',
                 'image' => $mainImagePath,
                 'payment_on_delivery' => isset($validated['payment_on_delivery']) ? (bool)$validated['payment_on_delivery'] : false,
@@ -230,6 +232,7 @@ class MerchantProductController extends Controller
                 'stock_quantity' => 'sometimes|integer|min:0',
                 'category_id' => 'sometimes|exists:categories,id',
                 'sub_category_id' => 'nullable|exists:sub_categories,id',
+                'department_id' => 'sometimes|exists:departments,id',
                 'payment_on_delivery' => 'boolean',
                 'return_policy' => 'nullable|string',
             ]);

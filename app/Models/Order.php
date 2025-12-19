@@ -56,6 +56,8 @@ class Order extends Model
         return $this->belongsTo(Merchant::class);
     }
 
+
+
     public function items()
     {
         return $this->hasMany(OrderItem::class);
@@ -115,4 +117,21 @@ class Order extends Model
 
         return $statuses[$this->status] ?? ['text' => 'Inconnu', 'color' => 'secondary'];
     }
+
+
+
+
+
+
+
+    public function conversation()
+{
+    return $this->hasOne(Conversation::class);
+}
+
+public function canStartConversation()
+{
+    // Une conversation peut être démarrée si la commande existe et n'est pas annulée
+    return $this->exists && $this->status !== 'cancelled';
+}
 }

@@ -13,6 +13,7 @@ use App\Models\Department;
 use App\Models\SubscriptionPlan; 
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
@@ -207,7 +208,40 @@ class DatabaseSeeder extends Seeder
             }
         }
 
-        // 2. Produits avec variantes détaillées
+        // Désactiver les contraintes FK
+    Schema::disableForeignKeyConstraints();
+
+    // Nettoyer les tables
+    DB::table('department_category')->truncate();
+    Department::truncate();
+    // Réactiver les FK
+    Schema::enableForeignKeyConstraints();
+        // Créer les départements
+           $departments = [
+            ['name' => 'Électronique', 'slug' => 'electronique', 'order' => 1, 'active' => true],
+            ['name' => 'Mode',         'slug' => 'mode',         'order' => 2, 'active' => true],
+            ['name' => 'Maison',       'slug' => 'maison',       'order' => 3, 'active' => true],
+            ['name' => 'Beauté',       'slug' => 'beaute',       'order' => 4, 'active' => true],
+            ['name' => 'Sport',        'slug' => 'sport',        'order' => 5, 'active' => true],
+            ['name' => 'Enfants',      'slug' => 'enfants',      'order' => 6, 'active' => true],
+        ];
+        foreach ($departments as $department) {
+            Department::create($department);
+        }
+
+        $this->command->info('✅ Départements créés avec succès');
+
+        // Associer les catégories aux départements
+    
+        // Récupérer les départements par slug
+ $departmentElectronique = Department::where('slug', 'electronique')->firstOrFail();
+        $departmentMode         = Department::where('slug', 'mode')->firstOrFail();
+        $departmentMaison       = Department::where('slug', 'maison')->firstOrFail();
+        $departmentBeaute       = Department::where('slug', 'beaute')->firstOrFail();
+        $departmentSports        = Department::where('slug', 'sport')->firstOrFail();
+        $departmentEnfants      = Department::where('slug', 'enfants')->firstOrFail(); 
+    
+    // 2. Produits avec variantes détaillées
         $productsData = [
             // ÉLECTRONIQUE - Smartphones
             [
@@ -222,6 +256,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => 'Livraison Express',
                 'category_id' => 1,
                 'sub_category_id' => 1,
+                'department_id' => $departmentElectronique->id,
                 'stock_quantity' => 45,
                 'sexe' => null, 
                 'age_group' => null,
@@ -281,6 +316,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => 'Top Vente',
                 'category_id' => 2,
                 'sub_category_id' => 5,
+                'department_id' => $departmentMode->id,   
                 'stock_quantity' => 78,
                 'sexe' => 'H', // HOMME
                 'age_group' => 'adult',
@@ -342,6 +378,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => 'Économie d\'énergie',
                 'category_id' => 3,
                 'sub_category_id' => 10,
+                'department_id' => $departmentMaison->id,
                 'stock_quantity' => 12,
                  'sexe' => null, 
                 'age_group' => null,
@@ -393,6 +430,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => 'Produit Premium',
                 'category_id' => 4,
                 'sub_category_id' => 16,
+                'department_id' => $departmentBeaute->id,
                 'stock_quantity' => 25,
                  'sexe' => null, 
                 'age_group' => null,
@@ -424,6 +462,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => 'Promo Fitness',
                 'category_id' => 5,
                 'sub_category_id' => 17,
+                'department_id' => $departmentSports->id,
                 'stock_quantity' => 8,
                  'sexe' => null, 
                 'age_group' => null,
@@ -474,7 +513,9 @@ class DatabaseSeeder extends Seeder
                 'location' => 'Yaoundé, Cameroun',
                 'badge' => 'Éducatif',
                 'category_id' => 6,
+                
                 'sub_category_id' => 22,
+                'department_id' => $departmentEnfants->id,
                 'stock_quantity' => 34,
                  'sexe' => null, 
                 'age_group' => 'child',
@@ -508,6 +549,7 @@ class DatabaseSeeder extends Seeder
                 'badge' => $productData['badge'],
                 'category_id' => $productData['category_id'],
                 'sub_category_id' => $productData['sub_category_id'],
+                'department_id' => $productData['department_id'],
                 'stock_quantity' => $productData['stock_quantity'],
                 'restock_frequency' => $productData['restock_frequency'],
                  'sexe' => $productData['sexe'] ?? null, 
@@ -575,6 +617,7 @@ class DatabaseSeeder extends Seeder
                 'original_price' => '1100000',
                 'category_id' => 1,
                 'sub_category_id' => 1,
+                
                 'stock_quantity' => 15,
                  'sexe' => null, 
                 'age_group' => null,
@@ -681,125 +724,14 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Sous-catégories: ' . SubCategory::count());
         $this->command->info('Produits: ' . Product::count());
         $this->command->info('Variantes: ' . ColorVariant::count());
-    
-    
-  $departments = [
-        ['name' => 'Tout', 'slug' => 'all', 'order' => 0, 'active' => 1],
-        ['name' => 'Hommes', 'slug' => 'hommes', 'order' => 1, 'active' => 1],
-        ['name' => 'Femmes', 'slug' => 'femmes', 'order' => 2, 'active' => 1],
-        ['name' => 'Enfants', 'slug' => 'enfants', 'order' => 3, 'active' => 1],
-        ['name' => 'Bijoux', 'slug' => 'bijoux', 'order' => 4, 'active' => 1],
-        ['name' => 'Électronique', 'slug' => 'electronique', 'order' => 5, 'active' => 1],
-        ['name' => 'Sport', 'slug' => 'sport', 'order' => 6, 'active' => 1],
-        ['name' => 'Maison', 'slug' => 'maison', 'order' => 7, 'active' => 1],
-        ['name' => 'Beauté', 'slug' => 'beaute', 'order' => 8, 'active' => 1],
-    ];
-
-    foreach ($departments as $department) {
-        Department::create($department);
     }
-
-    // Associer les catégories aux départements
-    $this->associateCategories();
-
-
-
-    
-
-    $plans = [
-            [
-                'name' => 'Starter',
-                'slug' => 'starter',
-                'description' => 'Parfait pour débuter sur la plateforme',
-                'monthly_price' => 5000,
-                'yearly_price' => 50000,
-                'product_limit' => 10,
-                'order_limit' => 50,
-                'commission_rate' => 5.0,
-                'features' => ['10 produits', '50 commandes/mois', 'Support email'],
-                'is_popular' => false,
-                'sort_order' => 1,
-            ],
-            [
-                'name' => 'Pro',
-                'slug' => 'pro',
-                'description' => 'Idéal pour les vendeurs actifs',
-                'monthly_price' => 15000,
-                'yearly_price' => 150000,
-                'product_limit' => 100,
-                'order_limit' => 500,
-                'commission_rate' => 3.0,
-                'features' => ['100 produits', '500 commandes/mois', 'Support prioritaire', 'Analyses avancées'],
-                'is_popular' => true,
-                'sort_order' => 2,
-            ],
-            [
-                'name' => 'Enterprise',
-                'slug' => 'enterprise',
-                'description' => 'Pour les boutiques à fort volume',
-                'monthly_price' => 30000,
-                'yearly_price' => 300000,
-                'product_limit' => 0, // Illimité
-                'order_limit' => 0, // Illimité
-                'commission_rate' => 1.5,
-                'features' => ['Produits illimités', 'Commandes illimitées', 'Support 24/7', 'API accès', 'Personnalisation'],
-                'is_popular' => false,
-                'sort_order' => 3,
-            ],
-        ];
-
-        foreach ($plans as $plan) {
-            SubscriptionPlan::create($plan);
-        }
-
-
-
 
 }
 
-private function associateCategories()
-{
-    // Récupérer tous les départements
-    $departments = Department::where('slug', '!=', 'all')->get()->keyBy('slug');
+
+
+        
     
-    // Récupérer toutes les catégories
-    $categories = Category::all()->keyBy('name');
-
-    // Mapping COMPLET entre départements et catégories
-    $mapping = [
-        'hommes' => ['Beauté & Santé'],
-        'femmes' => ['Beauté & Santé', 'Bijoux'],
-        'enfants' => ['Enfants & Bébés'],
-        'bijoux' => ['Bijoux'],
-        'electronique' => ['Électronique & Technologies'],
-        'sport' => ['Sports & Loisirs'],
-        'maison' => ['Maison & Jardin'],
-        'beaute' => ['Beauté & Santé'],
-    ];
-
-    foreach ($mapping as $deptSlug => $categoryNames) {
-        $department = $departments[$deptSlug] ?? null;
-        if (!$department) {
-            echo "Département $deptSlug non trouvé!\n";
-            continue;
-        }
-        
-        foreach ($categoryNames as $index => $categoryName) {
-            $category = $categories[$categoryName] ?? null;
-            if (!$category) {
-                echo "Catégorie $categoryName non trouvée!\n";
-                continue;
-            }
-            
-            // Associer la catégorie au département
-            $department->categories()->attach($category->id, ['order' => $index + 1]);
-            echo "Associé: {$department->name} -> {$category->name}\n";
-        }
-    }
-}
-
-        
-    }
 
     
     

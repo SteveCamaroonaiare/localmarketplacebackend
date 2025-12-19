@@ -6,8 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class Category extends Model
 {
-    protected $fillable = ['name', 'icon'];
-
+  protected $fillable = [
+        'name',
+        'slug',
+        'description',
+        'image',
+        'parent_id',
+        'order',
+        'active'
+    ];
 
     public function subCategories()
 {
@@ -20,11 +27,10 @@ class Category extends Model
     return $this->belongsToMany(Product::class, 'category_product');
     }
 
-   public function departments()
+  public function departments()
 {
     return $this->belongsToMany(Department::class, 'department_category')
-                ->withPivot('order')
-                ->orderBy('department_category.order')
-                ->withTimestamps();
-} 
+        ->withPivot('order')
+        ->withTimestamps();
+}
 }

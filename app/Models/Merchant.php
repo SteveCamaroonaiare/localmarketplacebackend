@@ -24,6 +24,7 @@ class Merchant extends Authenticatable
         'category',
         'payment_method',
         'payment_account',
+        'is_verified',
     ];
 
     protected $hidden = [
@@ -34,11 +35,31 @@ class Merchant extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
-    // Relationss
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
+
+public function conversations()
+{
+    return $this->hasMany(Conversation::class, 'merchant_id');
+}
+
+public function messages()
+{
+    return $this->hasManyThrough(Message::class, Conversation::class, 'merchant_id', 'conversation_id');
+}
+
+// Pour récupérer l'utilisateur associé
+public function user()
+{
+    return $this->belongsTo(User::class);
+}
+
+// Helper pour récupérer les conversations d'un marchand
+public function getConversations()
+{
+    return $this->conversations()
+        ->with(['customer', 'product', 'latestMessage'])
+        ->orderBy('last_message_at', 'desc')
+        ->get();
+}
     public function products()
     {
         return $this->hasMany(Product::class);

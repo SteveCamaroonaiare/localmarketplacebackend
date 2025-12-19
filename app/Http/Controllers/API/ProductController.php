@@ -12,13 +12,114 @@ use App\Models\Size;
 class ProductController extends Controller
 {
     // Récupérer tous les produits APPROUVÉS uniquement
-    public function index()
+public function index()
     {
-        $products = Product::with('variants', 'category', 'merchant')
-            ->where('status', 'approved') // ⚠️ IMPORTANT : Filtrer uniquement les produits approuvés
-            ->get();
+        try {
+            $products = Product::with('department')
+                ->get()
+                ->map(function ($product) {
+                    return [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'price' => $product->price,
+                        'original_price' => $product->original_price,
+                        'image' => $product->image,
+                        'badge' => $product->badge,
+                        'rating' => $product->rating,
+                        'reviews' => $product->reviews,
+                        'seller' => $product->seller,
+                        'location' => $product->location,
+                        'department_slug' => $product->department ? $product->department->slug : null,
+                    ];
+                });
+            
+            return response()->json($products);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erreur lors du chargement des produits',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Produits par département
+     */
+    public function byDepartment($slug)
+    {
+        try {
+            if ($slug === 'all') {
+                $products = Product::with('department')->get();
+            } else {
+                $department = Department::where('slug', $slug)->first();
+                
+                if (!$department) {
+                    return response()->json(['error' => 'Département non trouvé'], 404);
+                }
+                
+                $products = Product::with('department')
+                    ->where('department_id', $department->id)
+                    ->get();
+            }
+            
+            $formatted = $products->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'original_price' => $product->original_price,
+                    'image' => $product->image,
+                    'badge' => $product->badge,
+                    'rating' => $product->rating,
+                    'reviews' => $product->reviews,
+                    'seller' => $product->seller,
+                    'location' => $product->location,
+                    'department_slug' => $product->department ? $product->department->slug : null,
+                ];
+            });
+            
+            return response()->json($formatted);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erreur',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+    // Helper pour obtenir l'image principale du produit
+    private function getProductImage($product)
+    {
+        // Priorité 1: Image principale
+        if ($product->image) {
+            return url('storage/' . $product->image);
+        }
         
-        return response()->json($products);
+        // Priorité 2: Première image de la galerie
+        if ($product->images && $product->images->count() > 0) {
+            $primaryImage = $product->images->where('is_primary', true)->first() 
+                         ?? $product->images->first();
+            return url('storage/' . $primaryImage->image_path);
+        }
+        
+        // Priorité 3: Image par défaut
+        return '/placeholder.svg';
+    }
+
+    // Helper pour obtenir le badge du produit
+    private function getProductBadge($product)
+    {
+        if (!$product->original_price || $product->price >= $product->original_price) {
+            return null;
+        }
+        
+        $discount = round((($product->original_price - $product->price) / $product->original_price) * 100);
+        
+        if ($discount >= 50) return '-' . $discount . '%';
+        if ($discount >= 20) return 'PROMO';
+        
+        return null;
     }
 
     // Récupérer un produit spécifique
@@ -60,30 +161,130 @@ class ProductController extends Controller
         ]);
     }
 
-    // Produits en vedette / populaires
-    public function featured()
+    // Produits vedettes pour la page d'accueil
+    public function featuredProducts()
     {
-        $products = Product::with(['subCategory', 'category', 'colorVariants', 'images', 'merchant'])
-            ->where('status', 'approved') // ⚠️ IMPORTANT
+        $products = Product::with(['category', 'merchant', 'images', 'colorVariants'])
+            ->where('status', 'approved')
             ->where('rating', '>=', 4.0)
-            ->take(20)
+            ->orderBy('rating', 'desc')
+            ->take(12)
             ->get();
 
         return response()->json($products);
     }
 
-    // Produits en promotion
-    public function promotionalProducts()
+    // Nouveaux arrivages
+    public function newArrivals()
     {
-        $products = Product::with('variants', 'category', 'merchant')
-            ->where('status', 'approved') // ⚠️ IMPORTANT
+        $products = Product::with(['category', 'merchant', 'images', 'colorVariants'])
+            ->where('status', 'approved')
+            ->orderBy('created_at', 'desc')
+            ->take(12)
+            ->get();
+
+        return response()->json($products);
+    }
+
+    // Produits tendance (les plus vus/achetés)
+    public function trendingProducts()
+    {
+        $products = Product::with(['category', 'merchant', 'images', 'colorVariants'])
+            ->where('status', 'approved')
+            ->orderBy('reviews', 'desc')
+            ->take(12)
+            ->get();
+
+        return response()->json($products);
+    }
+
+    // Meilleures ventes
+    public function bestSellers()
+    {
+        $products = Product::with(['category', 'merchant', 'images', 'colorVariants'])
+            ->where('status', 'approved')
+            ->orderBy('reviews', 'desc')
+            ->take(12)
+            ->get();
+
+        return response()->json($products);
+    }
+
+    // Flash deals / Promotions limitées
+    public function flashDeals()
+    {
+        $products = Product::with(['category', 'merchant', 'images', 'colorVariants'])
+            ->where('status', 'approved')
             ->whereColumn('price', '<', 'original_price')
-            ->get()
-            ->filter(function ($product) {
-                $discount = (($product->original_price - $product->price) / $product->original_price) * 100;
-                return $discount >= 10 && $discount <= 70;
+            ->orderBy('created_at', 'desc')
+            ->take(8)
+            ->get();
+
+        return response()->json($products);
+    }
+
+    // Recherche de produits
+    public function search(Request $request)
+    {
+        $query = $request->input('q', '');
+        
+        $products = Product::with(['category', 'merchant', 'images'])
+            ->where('status', 'approved')
+            ->where(function($q) use ($query) {
+                $q->where('name', 'like', "%{$query}%")
+                  ->orWhere('description', 'like', "%{$query}%");
             })
-            ->values();
+            ->paginate(20);
+
+        return response()->json($products);
+    }
+
+    // Filtrer les produits
+    public function filter(Request $request)
+    {
+        $query = Product::with(['category', 'merchant', 'images'])
+            ->where('status', 'approved');
+
+        // Filtre par catégorie
+        if ($request->has('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
+
+        // Filtre par sous-catégorie
+        if ($request->has('sub_category_id')) {
+            $query->where('sub_category_id', $request->sub_category_id);
+        }
+
+        // Filtre par prix
+        if ($request->has('min_price')) {
+            $query->where('price', '>=', $request->min_price);
+        }
+        if ($request->has('max_price')) {
+            $query->where('price', '<=', $request->max_price);
+        }
+
+        // Filtre par note
+        if ($request->has('min_rating')) {
+            $query->where('rating', '>=', $request->min_rating);
+        }
+
+        // Tri
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $products = $query->paginate(20);
+
+        return response()->json($products);
+    }
+
+    // Produits par sous-catégorie
+    public function bySubCategory($subCategoryId)
+    {
+        $products = Product::with(['category', 'merchant', 'images'])
+            ->where('status', 'approved')
+            ->where('sub_category_id', $subCategoryId)
+            ->paginate(20);
 
         return response()->json($products);
     }
@@ -205,15 +406,4 @@ class ProductController extends Controller
 
         return response()->json(['message' => 'Stock restauré']);
     }
-
-// app/Http/Controllers/API/ProductController.php
-public function promotions()
-{
-    // Récupère uniquement les produits ayant une réduction entre 10% et 70%
-    $products = Product::whereRaw('(original_price - price) / original_price * 100 BETWEEN 10 AND 70')
-                       ->get();
-
-    return response()->json($products);
-}
-
 }

@@ -18,6 +18,7 @@ class Product extends Model
         'stock_quantity',
         'category_id',
         'sub_category_id',
+        'department_id',
         'status',
         'rejection_reason',
         'validated_at',
@@ -28,7 +29,11 @@ class Product extends Model
         'payment_on_delivery',  // ⚠️ Vérifier si c'est 'payment_on_delivery' ou 'payment_on_delivery'
         'return_policy',
         'sku',
-        'image',
+        'images',
+        'is_active',
+'reviews',
+        'appoved_by',
+        'approved_at',
         // N'ajoutez que les colonnes qui existent vraiment dans votre table !
         // Si ces colonnes n'existent pas, commentez-les ou supprimez-les :
         // 'sexe',
@@ -48,8 +53,10 @@ class Product extends Model
         'payment_on_delivery' => 'boolean',
         'return_policy' => 'boolean', // ⚠️ C'est un boolean dans votre table
         'has_color_variants' => 'boolean',
-        'rating' => 'float',
+        'rating' => 'decimal:1',
         'reviews' => 'integer',
+        'is_active' => 'boolean',
+        
     ];
 
     // Relations
@@ -82,6 +89,20 @@ class Product extends Model
     {
         return $this->hasMany(ProductImage::class);
     }
+
+
+public function department()
+{
+    return $this->belongsTo(Department::class);
+}
+
+
+
+
+
+
+
+    
 
     public function validator()
     {
@@ -126,5 +147,9 @@ class Product extends Model
             'rejected' => ['text' => 'Refusé', 'color' => 'danger'],
         ];
         return $statuses[$this->status] ?? ['text' => 'Inconnu', 'color' => 'secondary'];
+    }
+    public function scopeVisible($query)
+    {
+        return $query->where('status', 'approved')->where('is_active', true);
     }
 }

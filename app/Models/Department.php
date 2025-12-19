@@ -2,25 +2,57 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Department extends Model
 {
-    protected $fillable = ['name', 'slug', 'order', 'active'];
+    use HasFactory;
 
+    protected $fillable = [
+        'name',
+        'slug',
+        'order',
+        'active',
+    ];
+
+    protected $casts = [
+        'active' => 'boolean',
+        'order' => 'integer',
+    ];
+
+    /**
+     * Relation many-to-many avec Category
+     */
     public function categories()
     {
-        return $this->belongsToMany(Category::class, 'department_category')
-                    ->withPivot('order')
-                    ->orderBy('department_category.order')
-                    ->withTimestamps();
+        return $this->belongsToMany(Category::class, 'department_category') 
+            ->withPivot('order')
+            ->withTimestamps()
+            ->orderBy('department_category.order', 'asc');  
     }
 
-    // Produits via les catégories du département
-public function products()
-{
-    return $this->belongsToMany(Product::class, 'department_category', 'department_id', 'category_id')
-        ->withPivot('order')
-        ->orderBy('department_category.order');
-}
+    /**
+     * Récupérer tous les produits d'un département via ses catégories
+     */
+    public function products()
+    {
+        return Product::whereIn('category_id', $this->categories()->pluck('categories.id'));
+    }
+
+    /**
+     * Scope pour les départements actifs uniquement
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('active', true);
+    }
+
+    /**
+     * Scope pour trier par ordre
+     */
+    public function scopeOrdered($query)
+    {
+        return $query->orderBy('order', 'asc');
+    }
 }
