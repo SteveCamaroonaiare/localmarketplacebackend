@@ -19,7 +19,9 @@ class Merchant extends Authenticatable
         'password',
         'role',
         'shop_name',
+        'description',
         'shop_address',
+        'merchant_followers',
         'country',
         'category',
         'payment_method',
@@ -35,6 +37,36 @@ class Merchant extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+/**
+ * 👥 Users qui suivent ce marchand
+ */
+public function followers()
+{
+    return $this->belongsToMany(
+        User::class,
+        'merchant_followers'
+    )->withTimestamps();
+}
+
+/**
+ * 📊 Nombre de followers
+ */
+public function getFollowersCountAttribute()
+{
+    return $this->followers()->count();
+}
+
+/**
+ * 🔍 Vérifie si un user suit ce marchand
+ */
+public function isFollowedBy(?User $user): bool
+{
+    if (!$user) return false;
+
+    return $this->followers()
+        ->where('user_id', $user->id)
+        ->exists();
+}
 
 public function conversations()
 {

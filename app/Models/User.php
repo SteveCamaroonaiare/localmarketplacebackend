@@ -37,6 +37,16 @@ class User extends Authenticatable
         'is_active_admin' => 'boolean',
         'admin_since' => 'datetime',
     ];
+/**
+ * 🏪 Marchands suivis par l'utilisateur
+ */
+public function followedMerchants()
+{
+    return $this->belongsToMany(
+        Merchant::class,
+        'merchant_followers'
+    )->withTimestamps();
+}
 
     // ========== RELATIONS EXISTANTES ==========
     public function addresses()

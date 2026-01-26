@@ -12,36 +12,51 @@ use App\Models\Size;
 class ProductController extends Controller
 {
     // Récupérer tous les produits APPROUVÉS uniquement
-public function index()
-    {
-        try {
-            $products = Product::with('department')
-                ->get()
-                ->map(function ($product) {
-                    return [
-                        'id' => $product->id,
-                        'name' => $product->name,
-                        'price' => $product->price,
-                        'original_price' => $product->original_price,
-                        'image' => $product->image,
-                        'badge' => $product->badge,
-                        'rating' => $product->rating,
-                        'reviews' => $product->reviews,
-                        'seller' => $product->seller,
-                        'location' => $product->location,
-                        'department_slug' => $product->department ? $product->department->slug : null,
-                    ];
-                });
-            
-            return response()->json($products);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erreur lors du chargement des produits',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+public function index(Request $request)
+{
+    try {
+        $user = $request->user(); // Utilisateur connecté ou null
+        
+        $products = Product::with(['department', 'merchant.followers', 'images'])
+            ->where('status', 'approved')
+            ->get()
+            ->map(function ($product) use ($user) {
+                $primaryImage = $product->images()->where('is_primary', true)->first();
+                $imageUrl = $primaryImage 
+                    ? asset('storage/' . $primaryImage->image_path)
+                    : ($product->images->first() 
+                        ? asset('storage/' . $product->images->first()->image_path)
+                        : null);
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'price' => $product->price,
+                    'original_price' => $product->original_price,
+                    'image' => $imageUrl,
+//'badge' => $product->badge ?? $this->generateBadge($product),                        
+                    'rating' => $product->rating,
+                    'reviews' => $product->reviews,
+                    'merchant_id' => $product->merchant_id,
+                    'seller' => $product->merchant ? ($product->merchant->shop_name ?? $product->merchant->name) : null,
+                    'location' => $product->location ?? $product->merchant->shop_address ?? null,
+                    'department_slug' => optional($product->department)->slug,
+                    'is_following' => $user && $product->merchant 
+                        ? $product->merchant->isFollowedBy($user) 
+                        : false,
+                    'followers_count' => $product->merchant ? $product->merchant->followers_count : 0,
+                ];
+            });
+
+        return response()->json($products);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Erreur lors du chargement des produits',
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
     
     /**
      * Produits par département

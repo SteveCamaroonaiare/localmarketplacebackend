@@ -142,6 +142,10 @@ class AdminMerchantController extends Controller
                             'shop_name' => $merchant->shop_name,
                             'products_count' => $merchant->products_count,
                             'total_revenue' => $merchant->total_revenue,
+                            'followers_count' => $merchant->followers_count,
+  'is_followed' => auth()->check()
+      ? $merchant->isFollowedBy(auth()->user())
+      : false,
                         ];
                     }),
             ];

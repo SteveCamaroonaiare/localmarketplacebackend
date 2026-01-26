@@ -61,9 +61,9 @@ class Product extends Model
 
     // Relations
     public function merchant()
-    {
-        return $this->belongsTo(Merchant::class);
-    }
+{
+    return $this->belongsTo(Merchant::class, 'merchant_id', 'id');
+}
 
     public function category()
     {
@@ -152,4 +152,24 @@ public function department()
     {
         return $query->where('status', 'approved')->where('is_active', true);
     }
+
+    // app/Models/Product.php
+
+// Ajoutez ces accessors
+/**private function generateBadge($product)
+{
+    // Badge "Nouveau" si créé il y a moins de 7 jours
+    if ($product->created_at->diffInDays(now()) <= 7) {
+        return 'Nouveau';
+    }
+    
+    // Badge "Promo" si prix réduit
+    if ($product->original_price > $product->price) {
+        $discount = round((($product->original_price - $product->price) / $product->original_price) * 100);
+        return "-{$discount}%";
+    }
+    
+    return null;
+} */
+
 }

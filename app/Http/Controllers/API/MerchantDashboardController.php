@@ -100,6 +100,10 @@ class MerchantDashboardController extends Controller
                     'phone' => $merchant->phone ?? '',
                     'shop_name' => $merchant->shop_name ?? '',
                     'shop_address' => $merchant->shop_address ?? '',
+                    'followers_count' => $merchant->followers_count,
+  'is_followed' => auth()->check()
+      ? $merchant->isFollowedBy(auth()->user())
+      : false,
                     'country' => $merchant->country ?? '',
                     'category' => $merchant->category ?? '',
                     'payment_method' => $merchant->payment_method ?? '',

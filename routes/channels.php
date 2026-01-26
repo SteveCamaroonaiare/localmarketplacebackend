@@ -2,6 +2,9 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use App\Models\Conversation;
+use App\Models\User;
+use App\Policies\ConversationPolicy;
+use Illuminate\Support\Facades\Log;
 /*
 |--------------------------------------------------------------------------
 | Broadcast Channels

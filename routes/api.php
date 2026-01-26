@@ -22,7 +22,9 @@ use App\Http\Controllers\API\OrderController;
   use App\Http\Controllers\API\GoogleAuthController;
   use App\Http\Controllers\API\HomeController;
   use App\Http\Controllers\API\ConversationController;
-  
+  use App\Http\Controllers\API\MessageController;
+use App\Http\Controllers\API\MerchantFollowController;
+use App\Http\Controllers\API\MerchantPublicController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -71,7 +73,32 @@ Route::get('/promotions', [ProductController::class, 'promotionalProducts']);
 
 
 
-
+// Route temporaire pour tester
+Route::get('/products-with-merchant', function() {
+    $products = \App\Models\Product::with('merchant')
+        ->where('status', 'approved')
+        ->get()
+        ->map(function($product) {
+            return [
+                'id' => $product->id,
+                        'name' => $product->name,
+                        'price' => $product->price,
+                        'originalPrice' => $product->original_price,
+                        'image' => $product->image,
+                        'badge' => $product->badge,
+                        'rating' => $product->rating,
+                        'reviews' => $product->reviews,
+                        'location' => $product->location,
+                        // 🔥 Assurez-vous d'ajouter merchant_id et seller
+                        'merchant_id' => $product->merchant_id,
+                        'seller' => $product->merchant ? ($product->merchant->shop_name ?? $product->merchant->name) : null,
+                        'department_slug' => optional($product->department)->slug,
+                   
+            ];
+        });
+    
+    return response()->json($products);
+});
 
 
 
@@ -89,8 +116,6 @@ Route::get('/subcategories', [CategoryController::class, 'subCategoriesIndex']);
 Route::get('/subcategories/{id}', [CategoryController::class, 'subCategoryShow']);
 Route::get('/subcategories/{id}/products', [CategoryController::class, 'bySubCategory']);
 
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories/{id}/products', [ProductController::class, 'byCategory']);
 Route::put('/products/{id}/stock', [ProductController::class, 'updateStock']);
 Route::put('products/restore-stock', [ProductController::class, 'restoreStock']);
@@ -146,42 +171,10 @@ Route::get('/test', function() {
         'timestamp' => now()
     ]);
 });
-Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/department/{slug}', [ProductController::class, 'byDepartment']);
 
 // Routes pour les produits
-Route::get('/products', function () {
-    try {
-        $products = \App\Models\Product::with('department')
-            ->where('status', 'approved')
-            ->orWhereNull('status') // Si certains produits n'ont pas de statut
-            ->get()
-            ->map(function ($product) {
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'price' => $product->price,
-                    'original_price' => $product->original_price,
-                    'image' => $product->image,
-                    'badge' => $product->badge,
-                    'rating' => $product->rating,
-                    'reviews' => $product->reviews,
-                    'seller' => $product->seller,
-                    'location' => $product->location,
-                    'department_slug' => $product->department ? $product->department->slug : null,
-                ];
-            });
-        
-        return response()->json($products);
-        
-    } catch (\Exception $e) {
-        \Log::error('Error in /products API: ' . $e->getMessage());
-        return response()->json([
-            'error' => 'Internal server error',
-            'message' => $e->getMessage()
-        ], 500);
-    }
-});
+
 
 // Route pour déboguer - version simplifiée
 Route::get('/products-simple', function () {
@@ -410,8 +403,14 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
         Route::post('/{id}/deactivate', [AdminMerchantController::class, 'deactivateMerchant']);
     });
 });
+Route::get('/merchants/{merchant}', [MerchantPublicController::class, 'show']);
 
 
+// Routes protégées par authentification
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/merchants/{merchantId}/follow', [MerchantFollowController::class, 'toggleFollow']);
+    Route::get('/merchants/{merchantId}/follow-status', [MerchantFollowController::class, 'checkFollowStatus']);
+});
 
 
 // Routes publiques pour la page d'accueil
@@ -487,4 +486,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         
         return response()->json(['count' => $count]);
     });
+});
+Route::get('/products-test', function() {
+    $products = \App\Models\Product::with('merchant')
+        ->where('status', 'approved')
+        ->get()
+        ->map(function ($product) {
+            return [
+                'id' => $product->id,
+                'name' => $product->name,
+                'merchant_id' => $product->merchant_id,
+                'seller' => $product->merchant ? $product->merchant->shop_name : null,
+            ];
+        });
+    
+    return response()->json($products);
 });
