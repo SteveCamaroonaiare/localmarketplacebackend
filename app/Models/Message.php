@@ -14,15 +14,17 @@ class Message extends Model
         'sender_id',
         'sender_type',
         'content',
-        'attachment_url',
-        'attachment_type',
+        'logo',
+        
+         'attachments',
         'is_read',
         'read_at'
     ];
 
     protected $casts = [
         'is_read' => 'boolean',
-        'read_at' => 'datetime'
+        'read_at' => 'datetime',
+        'attachments' => 'array',
     ];
 
     // ========== RELATIONS ==========
@@ -47,15 +49,14 @@ class Message extends Model
         }
     }
 
-    public function isFromCustomer()
-    {
-        return $this->sender_type === 'customer';
-    }
+    
 
-    public function isFromMerchant()
-    {
-        return $this->sender_type === 'merchant';
-    }
+  public function isFromCustomer()
+{
+    return $this->sender_type === 'customer';
+}
+
+
 
     // ========== ACCESSORS ==========
     public function getAttachmentUrlAttribute($value)

@@ -153,6 +153,11 @@ public function department()
         return $query->where('status', 'approved')->where('is_active', true);
     }
 
+    public function updates()
+{
+    return $this->hasMany(ProductUpdate::class);
+}
+
     // app/Models/Product.php
 
 // Ajoutez ces accessors

@@ -13,38 +13,22 @@ use Illuminate\Queue\SerializesModels;
 
 class MessageSent implements ShouldBroadcast
 {
-    use Dispatchable, InteractsWithSockets, SerializesModels;
+ use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $message;
+  public $message;
 
-    public function __construct(Message $message)
-    {
-        $this->message = $message;
-    }
+  public function __construct($message)
+  {
+      $this->message = $message;
+  }
 
-    public function broadcastOn()
-    {
-        return new PrivateChannel('conversation.' . $this->message->conversation_id);
-    }
+  public function broadcastOn()
+  {
+      return ['my-channel'];
+  }
 
-    public function broadcastWith()
-    {
-        return [
-            'id' => $this->message->id,
-            'conversation_id' => $this->message->conversation_id,
-            'sender_id' => $this->message->sender_id,
-            'sender_type' => $this->message->sender_type,
-            'content' => $this->message->content,
-            'attachment_url' => $this->message->attachment_url,
-            'attachment_type' => $this->message->attachment_type,
-            'is_read' => $this->message->is_read,
-            'created_at' => $this->message->created_at->toDateTimeString(),
-            'sender' => [
-                'id' => $this->message->sender->id,
-                'name' => $this->message->sender->name,
-                'email' => $this->message->sender->email,
-                'avatar_url' => $this->message->sender->avatar_url,
-            ],
-        ];
-    }
+  public function broadcastAs()
+  {
+      return 'my-event';
+  }
 }

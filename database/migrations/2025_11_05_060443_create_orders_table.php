@@ -23,7 +23,7 @@ return new class extends Migration
                 'pending', 'confirmed', 'processing', 'shipped',
                 'delivered', 'cancelled', 'refunded'
             ])->default('pending');
-
+            
             // Infos client
             $table->string('customer_name');
             $table->string('customer_email');

@@ -2,193 +2,196 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Controllers\Controller;
 use App\Models\Conversation;
-use App\Models\Message;
 use App\Models\Product;
 use App\Models\Order;
-use App\Events\MessageSent;
+use App\Models\Message;
 use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class ConversationController extends Controller
 {
     // Récupérer toutes les conversations de l'utilisateur
     public function index(Request $request)
     {
-        $user = $request->user();
-        
-        $conversations = Conversation::with([
-                'customer:id,name,email,avatar',
-                'merchant:id,name,logo,user_id',
-                'product:id,name,image',
-                'order:id,order_number',
-                'latestMessage'
-            ])
-            ->where(function($query) use ($user) {
-                // Si c'est un customer
-                $query->where('customer_id', $user->id)
-                      // Si c'est un merchant (via la relation merchant->user_id)
-                      ->orWhereHas('merchant', function($q) use ($user) {
-                          $q->where('user_id', $user->id);
-                      });
-            })
-            ->orderBy('last_message_at', 'desc')
-            ->paginate(20);
+        try {
+            $user = $request->user();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Non authentifié'
+                ], 401);
+            }
 
-        // Ajouter le nombre de messages non lus pour chaque conversation
-        foreach ($conversations as $conversation) {
-            $conversation->unread_count = $conversation->unreadCountForUser($user->id);
-        }
-
-        return response()->json($conversations);
-    }
-
-    // Créer ou récupérer une conversation
-    public function store(Request $request)
-    {
-        $request->validate([
-            'product_id' => 'required_without:order_id|exists:products,id',
-            'order_id' => 'required_without:product_id|exists:orders,id',
-        ]);
-
-        $user = $request->user();
-        
-        // Récupérer le merchant_id
-        if ($request->product_id) {
-            $product = Product::findOrFail($request->product_id);
-            $merchantId = $product->merchant_id;
-        } elseif ($request->order_id) {
-            $order = Order::findOrFail($request->order_id);
-            $merchantId = $order->merchant_id;
-        } else {
-            return response()->json(['message' => 'product_id ou order_id requis'], 400);
-        }
-
-        // Vérifier si une conversation existe déjà
-        $conversation = Conversation::where('customer_id', $user->id)
-            ->where('merchant_id', $merchantId)
-            ->when($request->product_id, function($query, $productId) {
-                return $query->where('product_id', $productId);
-            })
-            ->when($request->order_id, function($query, $orderId) {
-                return $query->where('order_id', $orderId);
-            })
-            ->first();
-
-        // Si non, créer une nouvelle conversation
-        if (!$conversation) {
-            $conversation = Conversation::create([
-                'product_id' => $request->product_id,
-                'order_id' => $request->order_id,
-                'customer_id' => $user->id,
-                'merchant_id' => $merchantId,
-                'last_message_at' => now(),
+            Log::info('🔍 Récupération des conversations', [
+                'user_id' => $user->id,
             ]);
-        }
 
-        return response()->json($conversation->load([
-            'customer:id,name,email,avatar',
-            'merchant:id,name,logo',
-            'product:id,name,image',
-            'order:id,order_number'
-        ]), 201);
+            $conversations = Conversation::with([
+                    'customer:id,name,email,avatar',
+                    'merchant:id,name,logo,user_id,shop_name,phone',
+                    'product:id,name',
+                    'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
+                    'latestMessage'
+                ])
+                ->where(function($query) use ($user) {
+                    $query->where('customer_id', $user->id)
+                          ->orWhereHas('merchant', function($q) use ($user) {
+                              $q->where('user_id', $user->id);
+                          });
+                })
+                ->orderBy('last_message_at', 'desc')
+                ->get();
+
+            Log::info('✅ Conversations trouvées', [
+                'count' => $conversations->count()
+            ]);
+
+            // Ajouter le nombre de messages non lus
+            foreach ($conversations as $conversation) {
+                $conversation->unread_count = $conversation->messages()
+                    ->where('sender_id', '!=', $user->id)
+                    ->where('is_read', false)
+                    ->count();
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $conversations
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur récupération conversations', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des conversations',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
-    // Récupérer une conversation spécifique
+    // Afficher une conversation spécifique
     public function show(Conversation $conversation)
     {
-        $user = auth()->user();
-        
-        // Vérifier l'autorisation
-        if (!$conversation->canAccess($user)) {
-            return response()->json(['message' => 'Non autorisé'], 403);
-        }
+        try {
+            $user = auth()->user();
+            
+            // Vérifier l'accès
+            $hasAccess = $conversation->customer_id === $user->id || 
+                        ($conversation->merchant && $conversation->merchant->user_id === $user->id);
+            
+            if (!$hasAccess) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Accès non autorisé'
+                ], 403);
+            }
 
-        // Marquer les messages comme lus
-        $conversation->markAsReadForUser($user->id);
-
-        return response()->json($conversation->load([
+             $conversation->load([
             'customer:id,name,email,avatar',
-            'merchant:id,name,logo,user_id',
-            'product:id,name,image',
-            'order:id,order_number,status',
-            'messages.sender:id,name,email,avatar'
-        ]));
-    }
-
-    // Récupérer les messages d'une conversation
-    public function messages(Conversation $conversation)
-    {
-        $user = auth()->user();
-        
-        if (!$conversation->canAccess($user)) {
-            return response()->json(['message' => 'Non autorisé'], 403);
-        }
-
-        $messages = $conversation->messages()
-            ->with('sender:id,name,email,avatar')
-            ->orderBy('created_at', 'desc')
-            ->paginate(50);
-
-        return response()->json($messages);
-    }
-
-    // Envoyer un message
-    public function sendMessage(Request $request, Conversation $conversation)
-    {
-        $user = auth()->user();
-        
-        if (!$conversation->canAccess($user)) {
-            return response()->json(['message' => 'Non autorisé'], 403);
-        }
-
-        $request->validate([
-            'content' => 'required|string|max:2000',
-            'attachment' => 'nullable|file|max:5120', // 5MB max
+            'merchant:id,name,logo,user_id,shop_name,phone',
+            'product:id,name',
+            'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
+            'order.items', //
+            'order.items.product.images',
+            'messages'
         ]);
 
-        // Déterminer le type d'expéditeur
-        $senderType = $user->id === $conversation->customer_id ? 'customer' : 'merchant';
+            return response()->json([
+                'success' => true,
+                'data' => $conversation
+            ]);
 
-        $messageData = [
-            'conversation_id' => $conversation->id,
-            'sender_id' => $user->id,
-            'sender_type' => $senderType,
-            'content' => $request->content,
-        ];
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur affichage conversation', [
+                'error' => $e->getMessage()
+            ]);
 
-        // Gérer l'upload de fichier si présent
-        if ($request->hasFile('attachment')) {
-            $file = $request->file('attachment');
-            $path = $file->store('attachments', 'public');
-            
-            $messageData['attachment_url'] = $path;
-            $messageData['attachment_type'] = $file->getMimeType();
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'affichage de la conversation'
+            ], 500);
         }
-
-        $message = Message::create($messageData);
-
-        // Mettre à jour la conversation
-        $conversation->update(['last_message_at' => now()]);
-
-        // Diffuser l'événement
-        broadcast(new MessageSent($message))->toOthers();
-
-        return response()->json($message->load('sender'), 201);
     }
 
-    // Marquer tous les messages comme lus
-    public function markAsRead(Conversation $conversation)
+    // Créer une nouvelle conversation
+    public function store(Request $request)
     {
-        $user = auth()->user();
-        
-        if (!$conversation->canAccess($user)) {
-            return response()->json(['message' => 'Non autorisé'], 403);
+        try {
+            $request->validate([
+                'product_id' => 'required_without:order_id|exists:products,id',
+                'order_id' => 'required_without:product_id|exists:orders,id',
+            ]);
+
+            $user = $request->user();
+            
+            $productId = $request->product_id;
+            
+            if ($request->product_id) {
+                $product = Product::findOrFail($request->product_id);
+                $merchantId = $product->merchant_id;
+            } elseif ($request->order_id) {
+                $order = Order::with('items.product')->findOrFail($request->order_id);
+                $merchantId = $order->merchant_id;
+                
+                if (!$productId && $order->items->isNotEmpty()) {
+                    $productId = $order->items->first()->product_id;
+                }
+            } else {
+                return response()->json(['message' => 'product_id ou order_id requis'], 400);
+            }
+
+            // Vérifier si une conversation existe déjà
+            $conversation = Conversation::where('customer_id', $user->id)
+                ->where('merchant_id', $merchantId)
+                ->when($productId, function($query, $productId) {
+                    return $query->where('product_id', $productId);
+                })
+                ->when($request->order_id, function($query, $orderId) {
+                    return $query->where('order_id', $orderId);
+                })
+                ->first();
+
+            if (!$conversation) {
+                $conversation = Conversation::create([
+                    'product_id' => $productId,
+                    'order_id' => $request->order_id,
+                    'customer_id' => $user->id,
+                    'merchant_id' => $merchantId,
+                    'last_message_at' => now(),
+                ]);
+                
+                Log::info('✅ Conversation créée', [
+                    'conversation_id' => $conversation->id,
+                    'product_id' => $productId,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $conversation->load([
+                    'customer:id,name,email,avatar',
+                    'merchant:id,name,logo,shop_name,phone',
+                    'product:id,name',
+                    'order:id,order_number'
+                ])
+            ], 201);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur création conversation', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la création de la conversation'
+            ], 500);
         }
-
-        $conversation->markAsReadForUser($user->id);
-
-        return response()->json(['success' => true]);
     }
 }

@@ -11,6 +11,7 @@ use App\Models\Size;
 use App\Models\VariantImage;
 use App\Models\Department;
 use App\Models\SubscriptionPlan; 
+use Database\Seeders\SubscriptionPlanSeeder;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -19,6 +20,7 @@ class DatabaseSeeder extends Seeder
 {
     public function run()
     {
+        
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
         
         // Nettoyer les tables
@@ -31,6 +33,7 @@ class DatabaseSeeder extends Seeder
         DB::statement('SET FOREIGN_KEY_CHECKS=0');
             Department::truncate();
         DB::table('department_category')->truncate();
+        SubscriptionPlan::truncate();
 
         // 1. Catégories Principales
         $categories = [
@@ -207,6 +210,7 @@ class DatabaseSeeder extends Seeder
                 ]);
             }
         }
+        
 
         // Désactiver les contraintes FK
     Schema::disableForeignKeyConstraints();
@@ -718,7 +722,9 @@ class DatabaseSeeder extends Seeder
         }
 
         DB::statement('SET FOREIGN_KEY_CHECKS=1');
-
+   $this->call([
+    SubscriptionPlanSeeder::class,
+]);
         $this->command->info('Base de données peuplée avec succès!');
         $this->command->info('Catégories: ' . Category::count());
         $this->command->info('Sous-catégories: ' . SubCategory::count());
@@ -726,12 +732,8 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Variantes: ' . ColorVariant::count());
     }
 
+
+ 
+
+
 }
-
-
-
-        
-    
-
-    
-    

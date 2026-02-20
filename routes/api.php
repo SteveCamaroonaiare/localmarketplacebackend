@@ -25,6 +25,8 @@ use App\Http\Controllers\API\OrderController;
   use App\Http\Controllers\API\MessageController;
 use App\Http\Controllers\API\MerchantFollowController;
 use App\Http\Controllers\API\MerchantPublicController;
+  use App\Http\Controllers\API\AdminController;
+  use App\Http\Controllers\API\MerchantSubscriptionController;  
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -291,7 +293,7 @@ Route::prefix('merchant')->group(function () {
     
     // Routes protégées (nécessitent authentification)
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/dashboard', [MerchantDashboardController::class, 'getDashboardData']);
+        Route::get('/dashboard', [MerchantDashboardController::class, 'dashboard']);
         Route::post('/update-profile', [MerchantAuthController::class, 'updateProfile']);
         Route::put('/update-profile', [MerchantAuthController::class, 'updateProfile']); // Support PUT aussi
         Route::post('/logout', [MerchantAuthController::class, 'logout']);
@@ -314,23 +316,102 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 // Routes pour les commandes
+
+
+Route::middleware('auth:sanctum')->get('/debug-me', function() {
+    $user = auth()->user();
+    $merchant = \App\Models\Merchant::where('user_id', $user->id)->first();
+    
+    return response()->json([
+        'user' => $user,
+        'merchant' => $merchant,
+    ]);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     
-    // Routes Client (acheter)
+    // Orders - Client
+    Route::post('/orders', [OrderController::class, 'store']);
     Route::prefix('orders')->group(function () {
-        Route::get('/', [OrderController::class, 'index']); // Mes commandes
-        Route::get('/{id}', [OrderController::class, 'show']); // Détails commande
-        Route::post('/', [OrderController::class, 'store']); // Créer commande
-        Route::post('/{id}/cancel', [OrderController::class, 'cancel']); // Annuler
+        Route::get('/', [OrderController::class, 'index']);
+        Route::get('/{id}', [OrderController::class, 'show']);
+        Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
     });
 
-    // Routes Merchant (vendre)
+    
+      Route::get('/conversations/order/{orderId}', [ConversationController::class, 'getByOrder']);
+
+    // Conversations
+    Route::get('/conversations', [ConversationController::class, 'index']);
+    Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
+    Route::post('/conversations', [ConversationController::class, 'store']);
+    
+    // Messages
+    Route::get('/conversations/{conversation}/messages', [MessageController::class, 'index']);
+    Route::post('/conversations/{conversation}/messages', [MessageController::class, 'store']);
+
+    
+
+    Route::post('/conversations/{conversation}/mark-read', [ConversationController::class, 'markAsRead']);
+    
+
+    // Statistiques
+        Route::post('/conversations/migrate-guest', [ConversationController::class, 'migrateGuest']);
+
+    Route::get('/conversations/unread-count', function() {
+        $user = auth()->user();
+        
+        $count = Conversation::where(function($query) use ($user) {
+                $query->where('customer_id', $user->id)
+                      ->orWhereHas('merchant', function($q) use ($user) {
+                          $q->where('user_id', $user->id);
+                      });
+            })
+            ->withCount(['messages as unread_count' => function($query) use ($user) {
+                $query->where('sender_id', '!=', $user->id)
+                      ->where('is_read', false);
+            }])
+            ->get()
+            ->sum('unread_count');
+        
+        return response()->json(['count' => $count]);
+    });
+
+
+    // Orders - Merchant
     Route::prefix('merchant')->group(function () {
-        Route::get('/orders', [OrderController::class, 'merchantOrders']); // Toutes les commandes du vendeur
-        Route::get('/orders/stats', [OrderController::class, 'stats']); // Statistiques
-        Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']); // Changer statut
+        Route::get('/orders', [OrderController::class, 'merchantOrders']);
+        Route::get('/orders/stats', [OrderController::class, 'stats']);
+        Route::get('/orders/{id}', [OrderController::class, 'merchantOrderDetails']); 
+        Route::put('/orders/{id}/status', [OrderController::class, 'updateStatus']);
+
+        // ✅ NOUVEAU : Gestion des messages depuis le dashboard merchant
+        Route::get('/orders/{orderId}/conversation', [OrderController::class, 'getOrderConversation']);
+        Route::post('/orders/{orderId}/messages', [OrderController::class, 'sendMessageToCustomer']);
     });
 });
+
+// Routes Admin
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    // Dashboard
+    Route::get('/dashboard', [AdminController::class, 'dashboard']);
+    
+    
+    // Merchants
+    Route::get('/merchants', [AdminController::class, 'merchants']);
+    Route::get('/merchants/{id}', [AdminController::class, 'merchantDetails']);
+    
+     // Users
+    Route::get('/users', [AdminController::class, 'users']);
+    
+    // Orders
+    Route::get('/orders', [AdminController::class, 'orders']);
+    Route::get('/orders/recent', [AdminController::class, 'recentOrders']);
+    Route::get('/orders/{id}', [AdminController::class, 'orderDetails']);
+    // Statistiques
+    Route::get('/stats/regions', [AdminController::class, 'regionStats']);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     
     // Routes finances
@@ -341,16 +422,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/payouts', [FinanceController::class, 'getPayoutHistory']); // Nouvelle route
     });
 
-    // Routes d'abonnement
-    Route::prefix('merchant/subscription')->group(function () {
-        Route::get('/plans', [SubscriptionController::class, 'getPlans']);
-        Route::get('/current', [SubscriptionController::class, 'getCurrentSubscription']);
-        Route::post('/subscribe', [SubscriptionController::class, 'subscribe']);
-        Route::post('/cancel', [SubscriptionController::class, 'cancelSubscription']);
-        Route::get('/payment-history', [SubscriptionController::class, 'getPaymentHistory']);
+   
+});
+
+///abonnement vendeur 
+Route::middleware('auth:sanctum')->prefix('merchant')->group(function () {
+    // Subscription
+    Route::prefix('subscription')->group(function () {
+        Route::get('/plans', [MerchantSubscriptionController::class, 'plans']);
+        Route::get('/current', [MerchantSubscriptionController::class, 'current']);
+        Route::post('/subscribe', [MerchantSubscriptionController::class, 'subscribe']);
+        Route::post('/cancel', [MerchantSubscriptionController::class, 'cancel']);
+        Route::get('/payment-history', [MerchantSubscriptionController::class, 'paymentHistory']);
     });
 });
-Route::middleware('auth:sanctum')->prefix('merchant')->group(function () {
+
+
+Route::middleware('auth:sanctum',)->prefix('merchant')->group(function () {
     
     // Produits du merchant
     Route::prefix('products')->group(function () {
@@ -395,14 +483,15 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     });
 
     // Gestion des merchants
-    Route::prefix('merchants')->group(function () {
-        Route::get('/pending', [AdminMerchantController::class, 'pendingMerchants']);
-        Route::get('/stats', [AdminMerchantController::class, 'stats']);
-        Route::post('/{id}/approve', [AdminMerchantController::class, 'approveMerchant']);
-        Route::post('/{id}/reject', [AdminMerchantController::class, 'rejectMerchant']);
-        Route::post('/{id}/deactivate', [AdminMerchantController::class, 'deactivateMerchant']);
-    });
+Route::get('/merchants', [AdminController::class, 'merchants']);
+    Route::get('/merchants/pending', [AdminController::class, 'pendingMerchants']);
+    Route::post('/merchants/{id}/approve', [AdminController::class, 'approveMerchant']);
+    Route::post('/merchants/{id}/reject', [AdminController::class, 'rejectMerchant']);
+            Route::get('/stats', [AdminMerchantController::class, 'stats']);
+
+        Route::post('/merchants/{id}/deactivate', [AdminMerchantController::class, 'deactivateMerchant']);
 });
+
 Route::get('/merchants/{merchant}', [MerchantPublicController::class, 'show']);
 
 
@@ -455,38 +544,8 @@ Route::get('/debug-products', function () {
 });
 
 
-Route::middleware(['auth:sanctum'])->group(function () {
-    
-    // Conversations
-    Route::get('/conversations', [ConversationController::class, 'index']);
-    Route::post('/conversations', [ConversationController::class, 'store']);
-    Route::get('/conversations/{conversation}', [ConversationController::class, 'show']);
-    Route::post('/conversations/{conversation}/mark-read', [ConversationController::class, 'markAsRead']);
-    
-    // Messages
-    Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages']);
-    Route::post('/conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
-    
-    // Statistiques
-    Route::get('/conversations/unread-count', function() {
-        $user = auth()->user();
-        
-        $count = Conversation::where(function($query) use ($user) {
-                $query->where('customer_id', $user->id)
-                      ->orWhereHas('merchant', function($q) use ($user) {
-                          $q->where('user_id', $user->id);
-                      });
-            })
-            ->withCount(['messages as unread_count' => function($query) use ($user) {
-                $query->where('sender_id', '!=', $user->id)
-                      ->where('is_read', false);
-            }])
-            ->get()
-            ->sum('unread_count');
-        
-        return response()->json(['count' => $count]);
-    });
-});
+// routes/api.php
+
 Route::get('/products-test', function() {
     $products = \App\Models\Product::with('merchant')
         ->where('status', 'approved')
@@ -502,3 +561,5 @@ Route::get('/products-test', function() {
     
     return response()->json($products);
 });
+
+// Route publique pour accéder à une conversation par order_id (pour les guests)

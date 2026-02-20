@@ -138,23 +138,47 @@ public function index(Request $request)
     }
 
     // Récupérer un produit spécifique
-    public function show($id)
-    {
-        $product = Product::with([
-                'colorVariants.sizes',
-                'colorVariants.images',
-                'sizes',
-                'images',
-                'merchant'])
-            ->where('status', 'approved') // ⚠️ IMPORTANT
-            ->find($id);
-        
-        if (!$product) {
-            return response()->json(['error' => 'Produit non trouvé ou non disponible'], 404);
-        }
+   public function show($id)
+{
+    $product = Product::with([
+        'colorVariants.sizes',
+        'colorVariants.images',
+        'sizes',
+        'images',
+        'merchant'
+    ])
+    ->where('status', 'approved')
+    ->find($id);
 
-        return response()->json($product);
+    if (!$product) {
+        return response()->json([
+            'error' => 'Produit non trouvé ou non disponible'
+        ], 404);
     }
+
+    // Transformer les images produit
+    $product->images = $product->images->map(function ($image) {
+        return [
+            'id' => $image->id,
+            'image_url' => asset('storage/' . $image->image_path),
+            'is_primary' => $image->is_primary,
+        ];
+    });
+
+    // Transformer les images des colorVariants
+    $product->colorVariants->each(function ($variant) {
+        $variant->images = $variant->images->map(function ($image) {
+            return [
+                'id' => $image->id,
+                'image_url' => asset('storage/' . $image->image_path),
+                'is_primary' => $image->is_primary,
+            ];
+        });
+    });
+
+    return response()->json($product);
+}
+
 
     // Récupérer les produits par catégorie
     public function byCategory($categoryId)

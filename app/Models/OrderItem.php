@@ -10,9 +10,16 @@ class OrderItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id', 'product_id',
-        'product_name', 'product_description', 'product_image', 'product_sku',
-        'unit_price', 'quantity', 'subtotal', 'attributes'
+        'order_id',
+        'product_id',
+        'product_name',
+        'product_description',
+        'product_image',
+        'product_sku',
+        'unit_price',
+        'quantity',
+        'subtotal',
+        'attributes',
     ];
 
     protected $casts = [
@@ -20,7 +27,7 @@ class OrderItem extends Model
     ];
 
     // 🔗 Relations
-    public function order()
+   public function order()
     {
         return $this->belongsTo(Order::class);
     }
@@ -28,5 +35,13 @@ class OrderItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    // ✅ AJOUTEZ : Accesseur pour l'image complète
+    public function getImageUrlAttribute()
+    {
+        return $this->product_image 
+            ? asset('storage/' . $this->product_image)
+            : null;
     }
 }
