@@ -5,8 +5,12 @@
         "build": "vite build"
     },
     "devDependencies": {
+        "@types/jspdf": "^1.3.3",
         "axios": "^1.1.2",
         "laravel-vite-plugin": "^0.7.2",
         "vite": "^4.0.0"
+    },
+    "dependencies": {
+        "jspdf": "^4.2.0"
     }
 }

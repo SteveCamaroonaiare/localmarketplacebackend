@@ -1,169 +1,363 @@
 <?php
-// app/Http/Controllers/API/SuperAdminController.php
 
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\Product;
 use App\Models\Merchant;
 use App\Models\Order;
+use App\Models\MerchantSubscription;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class SuperAdminController extends Controller
 {
     /**
-     * Statistiques globales pour le super admin
+     * Dashboard principal du super admin
      */
     public function dashboardStats()
     {
         try {
+            $currentMonth = now()->month;
+            $currentYear = now()->year;
+
+            // Stats générales
             $stats = [
-                // Utilisateurs
-                'total_users' => User::count(),
-                'total_clients' => User::where('role', 'client')->count(),
-                'total_merchants' => User::where('role', 'merchant')->count(),
-                'pending_merchants' => Merchant::where('is_verified', false)->count(),
-
-                // Produits
-                'total_products' => Product::count(),
-                'pending_products' => Product::where('status', 'pending')->count(),
-                'approved_products' => Product::where('status', 'approved')->count(),
-                'rejected_products' => Product::where('status', 'rejected')->count(),
-
-                // Commandes
+                'total_admins' => User::where('role', 'admin')->count(),
+                'total_merchants' => Merchant::count(),
                 'total_orders' => Order::count(),
-                'pending_orders' => Order::where('status', 'pending')->count(),
-                'completed_orders' => Order::where('status', 'delivered')->count(),
-
-                // Admins
-                'total_admins' => User::whereNotNull('admin_role')->count(),
-                'active_admins' => User::whereNotNull('admin_role')->where('is_active_admin', true)->count(),
-                'super_admins' => User::where('admin_role', 'super_admin')->where('is_active_admin', true)->count(),
-
-                // Revenus
-                'total_revenue' => Order::where('payment_status', 'paid')->sum('total_price'),
-                'monthly_revenue' => Order::where('payment_status', 'paid')
-                    ->whereMonth('created_at', now()->month)
+                'total_revenue' => Order::whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                    ->sum('total_price'),
+                
+                // Ce mois
+                'this_month_orders' => Order::whereYear('created_at', $currentYear)
+                    ->whereMonth('created_at', $currentMonth)
+                    ->count(),
+                'this_month_revenue' => Order::whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                    ->whereYear('created_at', $currentYear)
+                    ->whereMonth('created_at', $currentMonth)
                     ->sum('total_price'),
             ];
 
             return response()->json([
                 'success' => true,
-                'message' => 'Statistiques globales récupérées',
-                'stats' => $stats
+                'data' => $stats
             ]);
 
         } catch (\Exception $e) {
+            Log::error('❌ Erreur dashboard super admin', [
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des statistiques'
+                'message' => 'Erreur lors de la récupération'
             ], 500);
         }
     }
 
     /**
-     * Activité récente des administrateurs
+     * Calcul des paiements à effectuer aux merchants
      */
-    public function adminActivity()
+    public function merchantPayouts(Request $request)
     {
         try {
-            // Produits approuvés récemment par des admins
-            $recentApprovals = Product::whereNotNull('approved_by')
-                ->with(['approvedBy', 'merchant'])
-                ->orderBy('approved_at', 'desc')
-                ->take(10)
-                ->get()
-                ->map(function ($product) {
-                    return [
-                        'id' => $product->id,
-                        'name' => $product->name,
-                        'approved_by' => $product->approvedBy->name,
-                        'approved_at' => $product->approved_at,
-                        'merchant' => $product->merchant->shop_name,
-                    ];
-                });
+            $month = $request->get('month', now()->month);
+            $year = $request->get('year', now()->year);
 
-            return response()->json([
-                'success' => true,
-                'recent_approvals' => $recentApprovals
-            ]);
+            $merchants = Merchant::where('is_verified', true)->get();
+            $payouts = [];
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la récupération de l\'activité'
-            ], 500);
-        }
-    }
+            foreach ($merchants as $merchant) {
+                // Récupérer l'abonnement actif
+                $subscription = MerchantSubscription::with('plan')
+                    ->where('merchant_id', $merchant->id)
+                    ->where('status', 'active')
+                    ->where('ends_at', '>', now())
+                    ->first();
 
-    /**
-     * Audit du système
-     */
-    public function systemAudit()
-    {
-        try {
-            $audit = [
-                'disk_usage' => $this->getDiskUsage(),
-                'database_size' => $this->getDatabaseSize(),
-                'last_backup' => $this->getLastBackupDate(),
-                'system_health' => $this->getSystemHealth(),
+                if (!$subscription) {
+                    continue; // Pas d'abonnement actif
+                }
+
+                // Commandes du mois
+                $orders = Order::where('merchant_id', $merchant->id)
+                    ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                    ->whereYear('created_at', $year)
+                    ->whereMonth('created_at', $month)
+                    ->get();
+
+                $totalSales = $orders->sum('total_price');
+                $totalOrders = $orders->count();
+
+                // Commission selon le plan
+                $commissionRate = $subscription->plan->commission_rate / 100;
+                $platformCommission = $totalSales * $commissionRate;
+                $merchantPayout = $totalSales - $platformCommission;
+
+                // Frais d'abonnement du mois
+                $subscriptionFee = $subscription->billing_cycle === 'monthly'
+                    ? $subscription->plan->monthly_price
+                    : $subscription->plan->yearly_price / 12;
+
+                // Montant net à payer au merchant
+                $netPayout = $merchantPayout - $subscriptionFee;
+
+                $payouts[] = [
+                    'merchant_id' => $merchant->id,
+                    'merchant_name' => $merchant->name,
+                    'shop_name' => $merchant->shop_name,
+                    'email' => $merchant->email,
+                    'phone' => $merchant->phone,
+                    'plan' => $subscription->plan->name,
+                    'commission_rate' => $subscription->plan->commission_rate,
+                    'total_sales' => $totalSales,
+                    'total_orders' => $totalOrders,
+                    'platform_commission' => $platformCommission,
+                    'subscription_fee' => $subscriptionFee,
+                    'gross_payout' => $merchantPayout,
+                    'net_payout' => $netPayout,
+                    'status' => $netPayout > 0 ? 'to_pay' : 'no_payment',
+                ];
+            }
+
+            // Totaux
+            $totals = [
+                'total_sales' => array_sum(array_column($payouts, 'total_sales')),
+                'total_commission' => array_sum(array_column($payouts, 'platform_commission')),
+                'total_subscription_fees' => array_sum(array_column($payouts, 'subscription_fee')),
+                'total_net_payout' => array_sum(array_column($payouts, 'net_payout')),
+                'merchants_to_pay' => count(array_filter($payouts, fn($p) => $p['net_payout'] > 0)),
             ];
 
             return response()->json([
                 'success' => true,
-                'audit' => $audit
+                'data' => [
+                    'payouts' => $payouts,
+                    'totals' => $totals,
+                    'month' => $month,
+                    'year' => $year,
+                ]
             ]);
 
         } catch (\Exception $e) {
+            Log::error('❌ Erreur calcul paiements merchants', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'audit du système'
+                'message' => 'Erreur lors du calcul'
             ], 500);
         }
     }
 
-    private function getDiskUsage()
+    /**
+     * Marquer un paiement comme effectué
+     */
+    public function markPayoutAsPaid(Request $request, $merchantId)
     {
-        // Implémentation basique de l'usage du disque
-        $total = disk_total_space('/');
-        $free = disk_free_space('/');
-        $used = $total - $free;
-        
-        return [
-            'total' => round($total / (1024 * 1024 * 1024), 2), // GB
-            'used' => round($used / (1024 * 1024 * 1024), 2),
-            'free' => round($free / (1024 * 1024 * 1024), 2),
-            'percentage' => round(($used / $total) * 100, 2)
-        ];
+        try {
+            $request->validate([
+                'month' => 'required|integer|min:1|max:12',
+                'year' => 'required|integer',
+                'amount' => 'required|numeric|min:0',
+                'payment_method' => 'required|string',
+                'reference' => 'nullable|string',
+            ]);
+
+            // Enregistrer dans une table de paiements (à créer)
+            DB::table('merchant_payouts')->insert([
+                'merchant_id' => $merchantId,
+                'month' => $request->month,
+                'year' => $request->year,
+                'amount' => $request->amount,
+                'payment_method' => $request->payment_method,
+                'reference' => $request->reference,
+                'paid_at' => now(),
+                'paid_by' => auth()->id(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            Log::info('✅ Paiement merchant effectué', [
+                'merchant_id' => $merchantId,
+                'amount' => $request->amount,
+                'paid_by' => auth()->user()->name,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Paiement enregistré avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur enregistrement paiement', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'enregistrement'
+            ], 500);
+        }
     }
 
-    private function getDatabaseSize()
+    /**
+     * Activité des administrateurs
+     */
+    public function adminActivity()
     {
-        // Taille approximative de la base de données
-        $size = DB::select("SELECT SUM(data_length + index_length) as size 
-                           FROM information_schema.TABLES 
-                           WHERE table_schema = ?", [config('database.connections.mysql.database')]);
-        
-        return round($size[0]->size / (1024 * 1024), 2); // MB
+        try {
+            $admins = User::where('role', 'admin')
+                ->orWhere('admin_role', 'super_admin')
+                ->select('id', 'name', 'email', 'role', 'admin_role', 'last_login_at', 'created_at')
+                ->get();
+
+            $activities = [];
+            foreach ($admins as $admin) {
+                $activities[] = [
+                    'admin_id' => $admin->id,
+                    'name' => $admin->name,
+                    'email' => $admin->email,
+                    'role' => $admin->admin_role ?? $admin->role,
+                    'last_login' => $admin->last_login_at,
+                    'actions_count' => 0, // À implémenter avec une table de logs
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $activities
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur activité admins', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération'
+            ], 500);
+        }
     }
 
-    private function getLastBackupDate()
+    /**
+     * Audit système
+     */
+    public function systemAudit(Request $request)
     {
-        // À implémenter selon votre système de backup
-        return null;
+        try {
+            $days = $request->get('days', 30);
+            $startDate = now()->subDays($days);
+
+            $audit = [
+                'merchants' => [
+                    'total' => Merchant::count(),
+                    'verified' => Merchant::where('is_verified', true)->count(),
+                    'pending' => Merchant::where('is_verified', false)->count(),
+                    'new_this_period' => Merchant::where('created_at', '>=', $startDate)->count(),
+                ],
+                'products' => [
+                    'total' => Product::count(),
+                    'approved' => Product::where('status', 'approved')->count(),
+                    'pending' => Product::where('status', 'pending')->count(),
+                    'rejected' => Product::where('status', 'rejected')->count(),
+                ],
+                'orders' => [
+                    'total' => Order::where('created_at', '>=', $startDate)->count(),
+                    'completed' => Order::where('status', 'delivered')
+                        ->where('created_at', '>=', $startDate)->count(),
+                    'cancelled' => Order::where('status', 'cancelled')
+                        ->where('created_at', '>=', $startDate)->count(),
+                ],
+                'revenue' => [
+                    'total' => Order::whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                        ->where('created_at', '>=', $startDate)
+                        ->sum('total_price'),
+                ],
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $audit,
+                'period_days' => $days
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur audit système', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de l\'audit'
+            ], 500);
+        }
     }
 
-    private function getSystemHealth()
+    /**
+     * Statistiques financières détaillées
+     */
+    public function financialStats(Request $request)
     {
-        return [
-            'status' => 'healthy',
-            'checks' => [
-                'database' => true,
-                'storage' => true,
-                'cache' => true,
-            ]
-        ];
+        try {
+            $month = $request->get('month', now()->month);
+            $year = $request->get('year', now()->year);
+
+            // Revenus par plan d'abonnement
+            $revenueByPlan = DB::table('merchant_subscriptions')
+                ->join('subscription_plans', 'merchant_subscriptions.plan_id', '=', 'subscription_plans.id')
+                ->join('orders', 'merchant_subscriptions.merchant_id', '=', 'orders.merchant_id')
+                ->whereYear('orders.created_at', $year)
+                ->whereMonth('orders.created_at', $month)
+                ->whereIn('orders.status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                ->select(
+                    'subscription_plans.name as plan_name',
+                    DB::raw('COUNT(DISTINCT merchant_subscriptions.merchant_id) as merchants_count'),
+                    DB::raw('SUM(orders.total_price) as total_revenue'),
+                    DB::raw('AVG(subscription_plans.commission_rate) as avg_commission_rate')
+                )
+                ->groupBy('subscription_plans.name')
+                ->get();
+
+            // Commission totale
+            $totalCommission = 0;
+            foreach ($revenueByPlan as $plan) {
+                $totalCommission += $plan->total_revenue * ($plan->avg_commission_rate / 100);
+            }
+
+            // Revenus abonnements
+            $subscriptionRevenue = DB::table('subscription_payments')
+                ->whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->where('status', 'paid')
+                ->sum('amount');
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'revenue_by_plan' => $revenueByPlan,
+                    'total_commission' => $totalCommission,
+                    'subscription_revenue' => $subscriptionRevenue,
+                    'total_platform_revenue' => $totalCommission + $subscriptionRevenue,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur stats financières', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération'
+            ], 500);
+        }
     }
 }

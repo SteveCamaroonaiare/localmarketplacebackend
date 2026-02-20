@@ -408,8 +408,11 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::get('/orders', [AdminController::class, 'orders']);
     Route::get('/orders/recent', [AdminController::class, 'recentOrders']);
     Route::get('/orders/{id}', [AdminController::class, 'orderDetails']);
+    Route::post('/orders/{id}', [AdminController::class, 'showOrder']);
     // Statistiques
     Route::get('/stats/regions', [AdminController::class, 'regionStats']);
+    Route::get('/admin/orders/{id}/download', [AdminController::class, 'downloadOrder']);
+
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -467,6 +470,11 @@ Route::middleware(['auth:sanctum', 'super_admin'])->prefix('super-admin')->group
     Route::get('/dashboard-stats', [SuperAdminController::class, 'dashboardStats']);
     Route::get('/admin-activity', [SuperAdminController::class, 'adminActivity']);
     Route::get('/system-audit', [SuperAdminController::class, 'systemAudit']);
+    
+    // ✅ Nouvelles routes financières
+    Route::get('/merchant-payouts', [SuperAdminController::class, 'merchantPayouts']);
+    Route::post('/merchant-payouts/{merchantId}/mark-paid', [SuperAdminController::class, 'markPayoutAsPaid']);
+    Route::get('/financial-stats', [SuperAdminController::class, 'financialStats']);
 });
 // Routes pour tous les admins
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
