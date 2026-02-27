@@ -15,36 +15,35 @@ class ProductController extends Controller
 public function index(Request $request)
 {
     try {
-        $user = $request->user(); // Utilisateur connecté ou null
-        
+        $user = $request->user();
+
         $products = Product::with(['department', 'merchant.followers', 'images'])
             ->where('status', 'approved')
             ->get()
             ->map(function ($product) use ($user) {
-                $primaryImage = $product->images()->where('is_primary', true)->first();
-                $imageUrl = $primaryImage 
-                    ? asset('storage/' . $primaryImage->image_path)
-                    : ($product->images->first() 
-                        ? asset('storage/' . $product->images->first()->image_path)
-                        : null);
 
+                // ✅ getProductImage() gère les 2 cas (seeder + upload réel)
                 return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'price' => $product->price,
-                    'original_price' => $product->original_price,
-                    'image' => $imageUrl,
-//'badge' => $product->badge ?? $this->generateBadge($product),                        
-                    'rating' => $product->rating,
-                    'reviews' => $product->reviews,
-                    'merchant_id' => $product->merchant_id,
-                    'seller' => $product->merchant ? ($product->merchant->shop_name ?? $product->merchant->name) : null,
-                    'location' => $product->location ?? $product->merchant->shop_address ?? null,
+                    'id'              => $product->id,
+                    'name'            => $product->name,
+                    'price'           => $product->price,
+                    'original_price'  => $product->original_price,
+                    'image'           => $this->getProductImage($product), // ✅ fix
+                    'rating'          => $product->rating,
+                    'reviews'         => $product->reviews,
+                    'merchant_id'     => $product->merchant_id,
+                    'seller'          => $product->merchant
+                                            ? ($product->merchant->shop_name ?? $product->merchant->name)
+                                            : null,
+                    'location'        => $product->location
+                                            ?? ($product->merchant->shop_address ?? null),
                     'department_slug' => optional($product->department)->slug,
-                    'is_following' => $user && $product->merchant 
-                        ? $product->merchant->isFollowedBy($user) 
-                        : false,
-                    'followers_count' => $product->merchant ? $product->merchant->followers_count : 0,
+                    'is_following'    => $user && $product->merchant
+                                            ? $product->merchant->isFollowedBy($user)
+                                            : false,
+                    'followers_count' => $product->merchant
+                                            ? $product->merchant->followers->count()
+                                            : 0,
                 ];
             });
 
@@ -52,75 +51,95 @@ public function index(Request $request)
 
     } catch (\Exception $e) {
         return response()->json([
-            'error' => 'Erreur lors du chargement des produits',
+            'error'   => 'Erreur lors du chargement des produits',
             'message' => $e->getMessage()
         ], 500);
     }
 }
+
+// ✅ getProductImage() — gère seeder ET produits réels
+private function getProductImage($product)
+{
+    // CAS 1 : Produit réel → images dans product_images
+    if ($product->relationLoaded('images') && $product->images->count() > 0) {
+        $primary = $product->images->where('is_primary', true)->first()
+                ?? $product->images->first();
+        // ✅ asset() retourne http://localhost:8000/storage/products/xxx.png
+        return asset('storage/' . $primary->image_path);
+    }
+
+    // CAS 2 : Produit seeder → colonne image directe
+    if (!empty($product->image)) {
+        // Déjà une URL complète → retourner tel quel
+        if (str_starts_with($product->image, 'http')) {
+            return $product->image;
+        }
+        // Chemin /assets/... → préfixer avec l'URL du serveur Laravel
+        if (str_starts_with($product->image, '/assets')) {
+            return url($product->image);
+            // ✅ retourne http://localhost:8000/assets/products/men-suit.jpg
+        }
+        // Autre chemin relatif → storage
+        return asset('storage/' . ltrim($product->image, '/'));
+    }
+
+    return null;
+}
+
     
     /**
      * Produits par département
      */
     public function byDepartment($slug)
-    {
-        try {
-            if ($slug === 'all') {
-                $products = Product::with('department')->get();
-            } else {
-                $department = Department::where('slug', $slug)->first();
-                
-                if (!$department) {
-                    return response()->json(['error' => 'Département non trouvé'], 404);
-                }
-                
-                $products = Product::with('department')
-                    ->where('department_id', $department->id)
-                    ->get();
+{
+    try {
+        if ($slug === 'all') {
+            $products = Product::with(['department', 'images'])
+                ->where('status', 'approved')
+                ->get();
+        } else {
+            $department = Department::where('slug', $slug)->first();
+
+            if (!$department) {
+                return response()->json(['error' => 'Département non trouvé'], 404);
             }
-            
-            $formatted = $products->map(function ($product) {
-                return [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'price' => $product->price,
-                    'original_price' => $product->original_price,
-                    'image' => $product->image,
-                    'badge' => $product->badge,
-                    'rating' => $product->rating,
-                    'reviews' => $product->reviews,
-                    'seller' => $product->seller,
-                    'location' => $product->location,
-                    'department_slug' => $product->department ? $product->department->slug : null,
-                ];
-            });
-            
-            return response()->json($formatted);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erreur',
-                'message' => $e->getMessage()
-            ], 500);
+
+            $products = Product::with(['department', 'images'])
+                ->where('department_id', $department->id)
+                ->where('status', 'approved')
+                ->get();
         }
+
+        $formatted = $products->map(function ($product) {
+            return [
+                'id'              => $product->id,
+                'name'            => $product->name,
+                'price'           => $product->price,
+                'original_price'  => $product->original_price,
+                'image'           => $this->getProductImage($product), // ✅ fix ici
+                'rating'          => $product->rating,
+                'reviews'         => $product->reviews,
+                'seller'          => $product->seller,
+                'location'        => $product->location,
+                'department_slug' => $product->department ? $product->department->slug : null,
+            ];
+        });
+
+        return response()->json($formatted);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error'   => 'Erreur',
+            'message' => $e->getMessage()
+        ], 500);
     }
-    // Helper pour obtenir l'image principale du produit
-    private function getProductImage($product)
-    {
-        // Priorité 1: Image principale
-        if ($product->image) {
-            return url('storage/' . $product->image);
-        }
-        
-        // Priorité 2: Première image de la galerie
-        if ($product->images && $product->images->count() > 0) {
-            $primaryImage = $product->images->where('is_primary', true)->first() 
-                         ?? $product->images->first();
-            return url('storage/' . $primaryImage->image_path);
-        }
-        
-        // Priorité 3: Image par défaut
-        return '/placeholder.svg';
-    }
+}
+
+
+
+
+
+
 
     // Helper pour obtenir le badge du produit
     private function getProductBadge($product)
@@ -138,7 +157,7 @@ public function index(Request $request)
     }
 
     // Récupérer un produit spécifique
-   public function show($id)
+  public function show($id)
 {
     $product = Product::with([
         'colorVariants.sizes',
@@ -156,8 +175,8 @@ public function index(Request $request)
         ], 404);
     }
 
-    // Transformer les images produit
-    $product->images = $product->images->map(function ($image) {
+    // Transformer images produit
+    $images = $product->images->map(function ($image) {
         return [
             'id' => $image->id,
             'image_url' => asset('storage/' . $image->image_path),
@@ -165,7 +184,7 @@ public function index(Request $request)
         ];
     });
 
-    // Transformer les images des colorVariants
+    // Transformer color variants
     $product->colorVariants->each(function ($variant) {
         $variant->images = $variant->images->map(function ($image) {
             return [
@@ -176,7 +195,23 @@ public function index(Request $request)
         });
     });
 
-    return response()->json($product);
+    return response()->json([
+        'id' => $product->id,
+        'name' => $product->name,
+        'price' => $product->price,
+        'original_price' => $product->original_price,
+        'description' => $product->description,
+        'stock_quantity' => $product->stock_quantity,
+
+        // ✅ AJOUT IMPORTANT
+        'image' => $images->first()['image_url'] ?? null,
+
+        'images' => $images,
+        'sizes' => $product->sizes,
+        'color_variants' => $product->colorVariants,
+        'has_color_variants' => $product->colorVariants->count() > 0,
+        'merchant' => $product->merchant,
+    ]);
 }
 
 
@@ -210,8 +245,20 @@ public function index(Request $request)
             ->take(12)
             ->get();
 
-        return response()->json($products);
-    }
+return response()->json(
+    $products->map(function ($product) {
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'price' => $product->price,
+            'original_price' => $product->original_price,
+            'image' => $this->getProductImage($product),
+            'rating' => $product->rating,
+            'reviews' => $product->reviews,
+            'merchant_id' => $product->merchant_id,
+        ];
+    })
+);    }
 
     // Nouveaux arrivages
     public function newArrivals()

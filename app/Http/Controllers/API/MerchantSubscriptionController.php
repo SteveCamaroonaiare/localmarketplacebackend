@@ -20,92 +20,102 @@ class MerchantSubscriptionController extends Controller
      * Liste des plans disponibles
      */
     public function plans()
-    {
-        try {
-            $plans = SubscriptionPlan::where('is_active', true)
-                ->orderBy('monthly_price', 'asc')
-                ->get();
+        {
+            try {
+                $plans = SubscriptionPlan::where('is_active', true)
+                    ->orderBy('monthly_price', 'asc') // Du moins cher au plus cher
+                    ->get();
 
-            return response()->json([
-                'success' => true,
-                'data' => $plans
-            ]);
+                return response()->json([
+                    'success' => true,
+                    'data' => $plans
+                ]);
 
-        } catch (\Exception $e) {
-            Log::error('❌ Erreur récupération plans', [
-                'error' => $e->getMessage()
-            ]);
+            } catch (\Exception $e) {
+                Log::error('❌ Erreur récupération plans', [
+                    'error' => $e->getMessage()
+                ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la récupération des plans'
-            ], 500);
-        }
-    }
-
-    /**
-     * Abonnement actuel du merchant
-     */
-    public function current()
-    {
-        try {
-            $user = auth()->user();
-            
-            $merchant = Merchant::where('user_id', $user->id)
-                ->orWhere('email', $user->email)
-                ->first();
-
-            if (!$merchant) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Merchant non trouvé'
-                ], 404);
+                    'message' => 'Erreur lors de la récupération des plans'
+                ], 500);
             }
-
-            // Abonnement actif
-            $subscription = MerchantSubscription::with('plan')
-                ->where('merchant_id', $merchant->id)
-                ->where('status', 'active')
-                ->where('ends_at', '>', now())
-                ->orderBy('created_at', 'desc')
-                ->first();
-
-            // Stats d'utilisation
-            $productsUsed = Product::where('merchant_id', $merchant->id)
-                ->where('status', 'approved')
-                ->count();
-
-            $ordersThisMonth = Order::where('merchant_id', $merchant->id)
-                ->whereYear('created_at', now()->year)
-                ->whereMonth('created_at', now()->month)
-                ->count();
-
-            $usage = [
-                'products_used' => $productsUsed,
-                'orders_this_month' => $ordersThisMonth,
-                'product_limit' => $subscription ? $subscription->plan->product_limit : 0,
-                'order_limit' => $subscription ? $subscription->plan->order_limit : 0,
-            ];
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'subscription' => $subscription,
-                    'usage' => $usage,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Erreur abonnement actuel', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la récupération'
-            ], 500);
         }
-    }
+
+    public function current(Request $request)
+        {
+            try {
+                $user = $request->user();
+                
+                $merchant = Merchant::where('user_id', $user->id)
+                    ->orWhere('email', $user->email)
+                    ->first();
+
+                if (!$merchant) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Merchant non trouvé',
+                        'has_subscription' => false,
+                    ], 404);
+                }
+
+                // Récupérer l'abonnement actif
+                $subscription = MerchantSubscription::with('plan')
+                    ->where('merchant_id', $merchant->id)
+                    ->where('status', 'active')
+                    ->where('ends_at', '>', now())
+                    ->first();
+
+                if (!$subscription) {
+                    return response()->json([
+                        'success' => true,
+                        'has_subscription' => false,
+                        'message' => 'Aucun abonnement actif',
+                    ]);
+                }
+
+                // Calculer les statistiques d'utilisation
+                $productsCount = $merchant->products()->where('status', 'approved')->count();
+                $ordersThisMonth = $merchant->orders()
+                    ->whereYear('created_at', now()->year)
+                    ->whereMonth('created_at', now()->month)
+                    ->count();
+
+                $usage = [
+                    'products_used' => $productsCount,
+                    'products_limit' => $subscription->plan->product_limit,
+                    'products_percentage' => $subscription->plan->product_limit > 0 
+                        ? round(($productsCount / $subscription->plan->product_limit) * 100, 1)
+                        : 0,
+                    
+                    'orders_used' => $ordersThisMonth,
+                    'orders_limit' => $subscription->plan->order_limit,
+                    'orders_percentage' => $subscription->plan->order_limit > 0
+                        ? round(($ordersThisMonth / $subscription->plan->order_limit) * 100, 1)
+                        : 0,
+                ];
+
+                return response()->json([
+                    'success' => true,
+                    'has_subscription' => true,
+                    'data' => [
+                        'subscription' => $subscription,
+                        'usage' => $usage,
+                    ]
+                ]);
+
+            } catch (\Exception $e) {
+                Log::error('❌ Erreur abonnement actuel', [
+                    'error' => $e->getMessage()
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Erreur lors de la récupération'
+                ], 500);
+            }
+        }
 
     /**
      * Souscrire à un plan

@@ -1,7 +1,11 @@
 <?php
+use Illuminate\Support\Facades\Password;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use App\Models\User;
 use App\Http\Controllers\API\AuthController;
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\ProductController; 
@@ -27,6 +31,10 @@ use App\Http\Controllers\API\MerchantFollowController;
 use App\Http\Controllers\API\MerchantPublicController;
   use App\Http\Controllers\API\AdminController;
   use App\Http\Controllers\API\MerchantSubscriptionController;  
+  use App\Http\Controllers\API\ProfileOrderController;
+   use App\Http\Controllers\API\CustomerController;
+   use App\Http\Controllers\API\Customer\WishlistController;
+   use App\Http\Controllers\API\CheckoutController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -65,6 +73,8 @@ Route::get('/subcategories/{id}/products', [ProductController::class, 'bySubCate
 // Tous les produits (avec pagination, recherche, filtres)
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
+// Dans routes/api.php
+Route::get('/products/{id}/variant', [ProductController::class, 'getVariant']);
 
 // Recherche et filtres
 Route::get('/products/search', [ProductController::class, 'search']);
@@ -451,6 +461,8 @@ Route::middleware('auth:sanctum',)->prefix('merchant')->group(function () {
         Route::get('/{id}', [MerchantProductController::class, 'show']); // Détails
         Route::put('/{id}', [MerchantProductController::class, 'update']); // Modifier
         Route::delete('/{id}', [MerchantProductController::class, 'destroy']); // Supprimer
+        Route::get('/products/stock-alerts', [MerchantProductController::class, 'stockAlerts']);
+
     });
 });
 // Routes Super Admin
@@ -570,4 +582,104 @@ Route::get('/products-test', function() {
     return response()->json($products);
 });
 
-// Route publique pour accéder à une conversation par order_id (pour les guests)
+//Profile
+
+
+
+// Routes client authentifié
+Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
+    // Profil
+    Route::get('/profile', [CustomerController::class, 'profile']);
+    Route::put('/profile', [CustomerController::class, 'updateProfile']);
+    Route::put('/profile/password', [CustomerController::class, 'updatePassword']);
+    
+    // Commandes
+    Route::get('/orders', [CustomerController::class, 'orders']);
+    Route::get('/orders/{id}', [CustomerController::class, 'orderDetails']);
+    Route::post('/orders/{id}/cancel', [CustomerController::class, 'cancelOrder']);
+    
+    // Messages (conversations avec merchants)
+    Route::get('/conversations', [CustomerController::class, 'conversations']);
+    Route::get('/conversations/{orderId}', [CustomerController::class, 'conversationMessages']);
+    Route::post('/conversations/{orderId}/messages', [CustomerController::class, 'sendMessage']);
+    
+    // Wishlist / Favoris
+    Route::get('/wishlist', [CustomerController::class, 'wishlist']);
+    Route::post('/wishlist/{productId}', [CustomerController::class, 'addToWishlist']);
+    Route::delete('/wishlist/{productId}', [CustomerController::class, 'removeFromWishlist']);
+    
+    // Adresses de livraison
+    Route::get('/addresses', [CustomerController::class, 'addresses']);
+    Route::post('/addresses', [CustomerController::class, 'storeAddress']);
+    Route::put('/addresses/{id}', [CustomerController::class, 'updateAddress']);
+    Route::delete('/addresses/{id}', [CustomerController::class, 'deleteAddress']);
+});
+
+
+// routes/api.php
+
+Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
+    Route::get('/wishlist', [WishlistController::class, 'index']);
+    Route::post('/wishlist', [WishlistController::class, 'store']);
+    Route::delete('/wishlist/{productId}', [WishlistController::class, 'destroy']);
+    Route::get('/wishlist/check/{productId}', [WishlistController::class, 'check']);
+    Route::post('/wishlist/migrate-guest', [WishlistController::class, 'migrateGuest']);
+});
+
+
+
+
+//Paiement gestion
+
+Route::middleware('auth:sanctum')->prefix('checkout')->group(function () {
+    // Adresses
+    Route::get('/addresses', [CheckoutController::class, 'getAddresses']);
+    Route::post('/addresses', [CheckoutController::class, 'saveAddress']);
+    Route::put('/addresses/{id}', [CheckoutController::class, 'updateAddress']);
+    Route::delete('/addresses/{id}', [CheckoutController::class, 'deleteAddress']);
+    
+    // Options de livraison
+    Route::post('/delivery-options', [CheckoutController::class, 'getDeliveryOptions']);
+    
+    // Créer une commande
+    Route::post('/create-order', [CheckoutController::class, 'createOrder']);
+    
+    // Vérifier le stock avant checkout
+    Route::post('/validate-cart', [CheckoutController::class, 'validateCart']);
+});
+
+
+
+Route::post('/forgot-password', function (Request $request) {
+    $request->validate(['email' => 'required|email']);
+
+    $status = Password::sendResetLink(
+        $request->only('email')
+    );
+
+    return $status === Password::RESET_LINK_SENT
+        ? response()->json(['message' => 'Email envoyé'])
+        : response()->json(['message' => 'Erreur'], 400);
+});
+
+Route::post('/reset-password', function (Request $request) {
+
+    $request->validate([
+        'token' => 'required',
+        'email' => 'required|email',
+        'password' => 'required|min:6|confirmed',
+    ]);
+
+    $status = Password::reset(
+        $request->only('email', 'password', 'password_confirmation', 'token'),
+        function (User $user, string $password) {
+            $user->forceFill([
+                'password' => Hash::make($password)
+            ])->save();
+        }
+    );
+
+    return $status === Password::PASSWORD_RESET
+        ? response()->json(['message' => 'Mot de passe réinitialisé'])
+        : response()->json(['message' => 'Token invalide'], 400);
+});

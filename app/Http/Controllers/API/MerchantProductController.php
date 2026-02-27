@@ -506,4 +506,53 @@ $product->update(
             ], 500);
         }
     }
+
+
+    public function stockAlerts(Request $request)
+    {
+        try {
+            $user = $request->user();
+            
+            $merchant = Merchant::where('user_id', $user->id)
+                ->orWhere('email', $user->email)
+                ->first();
+
+            if (!$merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Merchant non trouvé'
+                ], 404);
+            }
+
+            // Produits en rupture de stock
+            $outOfStock = Product::with('images')
+                ->where('merchant_id', $merchant->id)
+                ->where('stock_quantity', 0)
+                ->orWhere('is_in_stock', false)
+                ->get();
+
+            // Produits avec stock faible (≤ 5)
+            $lowStock = Product::with('images')
+                ->where('merchant_id', $merchant->id)
+                ->where('stock_quantity', '>', 0)
+                ->where('stock_quantity', '<=', 5)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'out_of_stock' => $outOfStock,
+                'low_stock' => $lowStock,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur alertes stock', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération'
+            ], 500);
+        }
+    }
 }

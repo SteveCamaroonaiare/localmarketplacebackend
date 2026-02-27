@@ -98,24 +98,32 @@ public function store(Request $request)
         $subtotal = 0;
         $orderItems = [];
 
-        foreach ($request->items as $item) {
-            $product = Product::with('images')->findOrFail($item['product_id']);
-            
-            if ($product->stock_quantity < $item['quantity']) {
+          foreach ($request->items as $item) {
+
+            $product = Product::lockForUpdate()
+                ->with('images')
+                ->findOrFail($item['product_id']);
+
+            $availableStock = $product->stock_quantity - $product->reserved_quantity;
+
+            if ($availableStock < $item['quantity']) {
                 DB::rollBack();
                 return response()->json([
                     'success' => false,
-                    'message' => "Stock insuffisant pour {$product->name}. Stock disponible: {$product->stock_quantity}"
+                    'message' => "Stock insuffisant pour {$product->name}. Disponible: {$availableStock}"
                 ], 400);
             }
 
             $itemSubtotal = $product->price * $item['quantity'];
             $subtotal += $itemSubtotal;
 
+            // ✅ Réserver le stock
+            $product->increment('reserved_quantity', $item['quantity']);
+
             $imagePath = null;
             if ($product->images && $product->images->count() > 0) {
                 $primaryImage = $product->images->where('is_primary', true)->first();
-                $imagePath = $primaryImage 
+                $imagePath = $primaryImage
                     ? $primaryImage->image_path
                     : $product->images->first()->image_path;
             }
@@ -130,9 +138,8 @@ public function store(Request $request)
                 'quantity' => $item['quantity'],
                 'subtotal' => $itemSubtotal,
                 'attributes' => isset($item['attributes']) ? json_encode($item['attributes']) : null,
+                'stock_deducted' => false,
             ];
-
-            $product->decrement('stock_quantity', $item['quantity']);
         }
 
         $shippingCost = $request->shipping_cost ?? 1000;
@@ -278,69 +285,92 @@ public function store(Request $request)
             'merchant_notes' => 'nullable|string',
         ]);
 
-        $user = auth()->user();
-        
-        // Vérifier que c'est bien une commande du merchant
-        $order = Order::whereHas('merchant', function($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->findOrFail($id);
+        DB::beginTransaction();
+
+        $order = Order::with('items')->findOrFail($id);
 
         $oldStatus = $order->status;
         $newStatus = $request->status;
 
-        // Mettre à jour le statut
-        $order->status = $newStatus;
-        
-        if ($request->tracking_number) {
-            $order->tracking_number = $request->tracking_number;
-        }
-        
-        if ($request->merchant_notes) {
-            $order->merchant_notes = $request->merchant_notes;
-        }
+        // ✅ DÉDUIRE LE STOCK UNIQUEMENT À LA LIVRAISON
+        if ($newStatus === 'delivered' && $oldStatus !== 'delivered') {
 
-        // ✅ Mettre à jour payment_status si la commande est confirmée
-        if ($newStatus === 'confirmed' && $order->payment_status === 'pending') {
-            $order->payment_status = 'paid';
-        }
-
-        // ✅ Si annulée, remettre le stock
-        if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
             foreach ($order->items as $item) {
-                $product = Product::find($item->product_id);
-                if ($product) {
-                    $product->increment('stock_quantity', $item->quantity);
+
+                if (!$item->stock_deducted) {
+
+                    $product = Product::lockForUpdate()->find($item->product_id);
+
+                    // Déduire stock réel
+                    $product->decrement('stock_quantity', $item->quantity);
+
+                    // Libérer réservation
+                    $product->decrement('reserved_quantity', $item->quantity);
+
+                    // Marquer comme déduit
+                    $item->update(['stock_deducted' => true]);
+
+                    Log::info('✅ Stock déduit définitivement', [
+                        'product_id' => $product->id,
+                        'remaining_stock' => $product->stock_quantity,
+                    ]);
+
+                    // ⚠️ Alerte stock faible
+                    if ($product->stock_quantity <= 5 && $product->stock_quantity > 0) {
+                        $this->sendLowStockAlert($product);
+                    }
+
+                    // 🚨 Rupture stock
+                    if ($product->stock_quantity == 0) {
+                        $this->sendOutOfStockAlert($product);
+                    }
                 }
             }
         }
 
+        // ✅ ANNULATION
+        if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+
+            foreach ($order->items as $item) {
+
+                $product = Product::lockForUpdate()->find($item->product_id);
+
+                if ($item->stock_deducted) {
+                    // Si déjà livré → remettre stock
+                    $product->increment('stock_quantity', $item->quantity);
+                } else {
+                    // Sinon → libérer réservation
+                    $product->decrement('reserved_quantity', $item->quantity);
+                }
+
+                Log::info('🔄 Stock restauré/libéré', [
+                    'product_id' => $product->id,
+                ]);
+            }
+        }
+
+        $order->status = $newStatus;
+
+        if ($request->tracking_number) {
+            $order->tracking_number = $request->tracking_number;
+        }
+
+        if ($request->merchant_notes) {
+            $order->merchant_notes = $request->merchant_notes;
+        }
+
+        if ($newStatus === 'confirmed' && $order->payment_status === 'pending') {
+            $order->payment_status = 'paid';
+        }
+
         $order->save();
 
-        // ✅ Envoyer un message automatique au client via la conversation
-        $this->sendStatusUpdateMessage($order, $oldStatus, $newStatus);
-
-        // ✅ Logger pour les stats admin (point 2)
-        Log::info('📊 Changement statut commande', [
-            'order_id' => $order->id,
-            'order_number' => $order->order_number,
-            'merchant_id' => $order->merchant_id,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-            'total_price' => $order->total_price,
-            'payment_status' => $order->payment_status,
-            'updated_by' => $user->id,
-        ]);
-
-        Log::info('✅ Statut commande mis à jour', [
-            'order_id' => $order->id,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-        ]);
+        DB::commit();
 
         return response()->json([
             'success' => true,
             'message' => 'Statut mis à jour avec succès',
-            'data' => $order->fresh()->load('items.product', 'merchant')
+            'data' => $order->fresh()->load('items.product')
         ]);
 
     } catch (\Exception $e) {
@@ -787,5 +817,52 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
     }
 
 
-    
+     private function sendLowStockAlert($product)
+    {
+        try {
+            // Récupérer le merchant
+            $merchant = $product->merchant;
+            
+            // Créer une notification (à implémenter selon votre système)
+            Log::warning('⚠️ ALERTE STOCK FAIBLE', [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'merchant_id' => $merchant->id,
+                'merchant_email' => $merchant->email,
+                'stock_remaining' => $product->stock_quantity,
+            ]);
+
+            // TODO: Envoyer email/SMS au merchant
+            // Mail::to($merchant->email)->send(new LowStockAlert($product));
+
+        } catch (\Exception $e) {
+            Log::error('Erreur alerte stock faible', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Alerte stock épuisé
+     */
+    private function sendOutOfStockAlert($product)
+    {
+        try {
+            $merchant = $product->merchant;
+            
+            Log::error('🚨 ALERTE STOCK ÉPUISÉ', [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'merchant_id' => $merchant->id,
+                'merchant_email' => $merchant->email,
+            ]);
+
+            // Marquer le produit comme en rupture
+            $product->update(['is_in_stock' => false]);
+
+            // TODO: Envoyer notification urgente
+            // Mail::to($merchant->email)->send(new OutOfStockAlert($product));
+
+        } catch (\Exception $e) {
+            Log::error('Erreur alerte stock épuisé', ['error' => $e->getMessage()]);
+        }
+    }
 }

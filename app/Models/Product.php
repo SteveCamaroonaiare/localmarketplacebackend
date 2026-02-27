@@ -158,6 +158,52 @@ public function department()
     return $this->hasMany(ProductUpdate::class);
 }
 
+public function variants()
+{
+    return $this->hasMany(ProductVariant::class);
+}
+
+// Obtenir les couleurs disponibles
+public function getAvailableColorsAttribute()
+{
+    return $this->variants()
+        ->whereNotNull('color_name')
+        ->where('is_available', true)
+        ->select('color_name', 'color_code')
+        ->distinct()
+        ->get();
+}
+
+// Obtenir les tailles disponibles
+public function getAvailableSizesAttribute()
+{
+    return $this->variants()
+        ->whereNotNull('size_name')
+        ->where('is_available', true)
+        ->select('size_name')
+        ->distinct()
+        ->get();
+}
+
+// Prix minimum (pour affichage liste produits)
+public function getMinPriceAttribute()
+{
+    return $this->variants()->min('price') ?? $this->price;
+}
+
+// Prix maximum
+public function getMaxPriceAttribute()
+{
+    return $this->variants()->max('price') ?? $this->price;
+}
+
+// Stock total de toutes les variantes
+public function getTotalStockAttribute()
+{
+    return $this->variants()->sum('stock_quantity');
+}
+
+
     // app/Models/Product.php
 
 // Ajoutez ces accessors
