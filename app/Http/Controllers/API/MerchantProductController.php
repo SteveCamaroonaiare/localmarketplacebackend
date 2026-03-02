@@ -9,8 +9,11 @@ use App\Models\SubCategory;
 use App\Models\ProductImage;
 use App\Models\ColorVariant;
 use App\Models\Size;
+use App\Models\Merchant;
+use Illuminate\Support\Str;
 use App\Models\ProductUpdate;
-
+use App\Models\ProductImageVariant;
+use App\Models\ProductImageVariantSize;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -54,137 +57,130 @@ class MerchantProductController extends Controller
     /**
      * Créer un nouveau produit
      */
-    public function store(Request $request)
-    {
-        try {
-            $merchant = $request->user();
+   public function store(Request $request)
+{
+    try {
+        Log::info('🟡 Tentative de création produit', [
+            'user' => $request->user()?->id,
+            'has_files' => $request->hasFile('images'),
+            'all_data' => $request->all()
+        ]);
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'required|string',
+            'category_id' => 'required|exists:categories,id',
+            'sub_category_id' => 'nullable|exists:sub_categories,id',
+            'department_id' => 'required|exists:departments,id',
+            'payment_on_delivery' => 'boolean',
+            
+            // Images avec leurs données
+            'images' => 'required|array|min:1|max:5',
+            'images.*.file' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'images.*.color_name' => 'nullable|string',
+            'images.*.color_code' => 'nullable|string',
+            'images.*.price' => 'required|numeric|min:0',
+            'images.*.original_price' => 'nullable|numeric|min:0',
+            'images.*.stock_quantity' => 'required|integer|min:0',
+            'images.*.sizes' => 'nullable|array', // Tableau de tailles
+            'images.*.sizes.*.name' => 'required|string',
+            'images.*.sizes.*.stock' => 'required|integer|min:0',
+        ]);
 
-            Log::info('🔍 Données reçues pour création produit:', [
-                'all_data' => $request->all(),
-                'files' => $request->allFiles(),
-                'merchant_id' => $merchant->id
-            ]);
+        DB::beginTransaction();
 
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'description' => 'required|string',
-                'price' => 'required|numeric|min:0',
-                'original_price' => 'nullable|numeric|min:0',
-                'stock_quantity' => 'required|integer|min:0',
-                'category_id' => 'required|exists:categories,id',
-                'sub_category_id' => 'nullable|exists:sub_categories,id',
-                'department_id' => 'required|exists:departments,id',
-                'payment_on_delivery' => 'nullable|boolean',
-                // 'return_policy' supprimé car c'est un boolean dans la table, pas du texte
-                'images' => 'required|array|min:1|max:5',
-                'images.*' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
-                'colors' => 'nullable|array',
-                'colors.*.name' => 'required_with:colors|string',
-                'colors.*.color_code' => 'required_with:colors|string',
-                'colors.*.stock_quantity' => 'required_with:colors|integer|min:0',
-                'sizes' => 'nullable|array',
-                'sizes.*.name' => 'required_with:sizes|string',
-                'sizes.*.stock_quantity' => 'required_with:sizes|integer|min:0',
-            ]);
+        $user = $request->user();
+        
+        $merchant = Merchant::where('user_id', $user->id)
+            ->orWhere('email', $user->email)
+            ->first();
 
-            Log::info('✅ Validation réussie');
-
-            DB::beginTransaction();
-
-            // Uploader la première image et obtenir son chemin
-            $mainImagePath = null;
-            if ($request->hasFile('images') && count($request->file('images')) > 0) {
-                $firstImage = $request->file('images')[0];
-                $mainImagePath = $firstImage->store('products', 'public');
-            }
-
-            // Créer le produit avec UNIQUEMENT les colonnes nécessaires
-            $product = Product::create([
-                'merchant_id' => $merchant->id,
-                'name' => $validated['name'],
-                'description' => $validated['description'],
-                'price' => $validated['price'],
-                'original_price' => $validated['original_price'] ?? $validated['price'],
-                'stock_quantity' => $validated['stock_quantity'],
-                'category_id' => $validated['category_id'],
-                'sub_category_id' => $validated['sub_category_id'] ?? null,
-                'department_id' => $validated['department_id'], 
-                'status' => 'pending',
-                'image' => $mainImagePath,
-                'payment_on_delivery' => isset($validated['payment_on_delivery']) ? (bool)$validated['payment_on_delivery'] : false,
-                'return_policy' => false, // ⚠️ C'est un boolean dans votre table, pas du texte !
-                'rating' => 0, // ⚠️ Obligatoire avec default 0
-                'reviews' => 0, // ⚠️ Obligatoire avec default 0
-            ]);
-
-            // Uploader toutes les images dans product_images
-            if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $index => $image) {
-                    $path = $image->store('products', 'public');
-                    
-                    ProductImage::create([
-                        'product_id' => $product->id,
-                        'image_path' => $path,
-                        'is_primary' => $index === 0,
-                    ]);
-                }
-            }
-
-            // Ajouter les variantes de couleur
-            if (!empty($validated['colors'])) {
-                foreach ($validated['colors'] as $color) {
-                    ColorVariant::create([
-                        'product_id' => $product->id,
-                        'color_name' => $color['name'],
-                        'color_code' => $color['color_code'],
-                        'stock_quantity' => $color['stock_quantity'],
-                    ]);
-                }
-            }
-
-            // Ajouter les tailles
-            if (!empty($validated['sizes'])) {
-                foreach ($validated['sizes'] as $size) {
-                    Size::create([
-                        'product_id' => $product->id,
-                        'name' => $size['name'],
-                        'stock_quantity' => $size['stock_quantity'],
-                    ]);
-                }
-            }
-
-            DB::commit();
-
-            // TODO: Envoyer notification à l'admin
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Produit créé avec succès et en attente de validation',
-                'product' => $product->load(['images', 'colorVariants', 'sizes']),
-            ], 201);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            DB::rollBack();
-            Log::error('❌ Erreur de validation:', [
-                'errors' => $e->errors(),
-                'message' => $e->getMessage()
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur de validation',
-                'errors' => $e->errors()
-            ], 422);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Erreur création produit: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la création du produit',
-                'error' => $e->getMessage()
-            ], 500);
+        if (!$merchant) {
+            throw new \Exception('Merchant non trouvé');
         }
+
+        // Prix de base = prix minimum des images
+        $basePrice = collect($validated['images'])->min('price');
+        $totalStock = collect($validated['images'])->sum('stock_quantity');
+
+        // Créer le produit
+        $product = Product::create([
+            'merchant_id' => $merchant->id,
+            'name' => $validated['name'],
+            'slug' => Str::slug($validated['name']) . '-' . time(),
+            'description' => $validated['description'],
+            'price' => $basePrice,
+            'stock_quantity' => $totalStock,
+            'category_id' => $validated['category_id'],
+            'sub_category_id' => $validated['sub_category_id'] ?? null,
+            'department_id' => $validated['department_id'],
+            'payment_on_delivery' => $validated['payment_on_delivery'] ?? false,
+            'status' => 'pending',
+            'is_in_stock' => true,
+        ]);
+
+        // Traiter chaque image comme une variante
+        foreach ($validated['images'] as $index => $imageData) {
+            // Uploader l'image
+            $imagePath = $imageData['file']->store('products', 'public');
+            
+            // Créer l'entrée dans product_images
+            $productImage = ProductImage::create([
+                'product_id' => $product->id,
+                'image_path' => $imagePath,
+                'sort_order' => $index,
+            ]);
+
+            // Créer la variante liée à cette image
+            $variant = ProductImageVariant::create([
+                'product_id' => $product->id,
+                'image_id' => $productImage->id,
+                'color_name' => $imageData['color_name'] ?? null,
+                'color_code' => $imageData['color_code'] ?? null,
+                'price' => $imageData['price'],
+                'original_price' => $imageData['original_price'] ?? null,
+                'stock_quantity' => $imageData['stock_quantity'],
+            ]);
+
+            // Ajouter les tailles si fournies
+            if (isset($imageData['sizes']) && is_array($imageData['sizes'])) {
+                foreach ($imageData['sizes'] as $sizeData) {
+                    ProductImageVariantSize::create([
+                        'variant_id' => $variant->id,
+                        'size_name' => $sizeData['name'],
+                        'stock_quantity' => $sizeData['stock'],
+                    ]);
+                }
+            }
+        }
+
+        DB::commit();
+
+        Log::info('✅ Produit créé avec variantes d\'images', [
+            'product_id' => $product->id,
+            'merchant_id' => $merchant->id,
+            'images_count' => count($validated['images']),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Produit créé avec succès',
+            'data' => $product->load('images', 'imageVariants.sizes'),
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        Log::error('❌ Erreur création produit', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage(),
+        ], 500);
     }
+}
 
     /**
      * Afficher un produit spécifique
@@ -342,130 +338,209 @@ public function update(Request $request, $id)
 
         DB::beginTransaction();
 
-        // Si déjà approuvé → repasse en pending
-        if ($product->status === 'approved') {
-            $product->status = 'pending';
-
-if ($product->status === 'approved') {
-
-    // Sauvegarder nouvelles images temporairement
-    $newImages = [];
-
-    if ($request->hasFile('images')) {
-        foreach ($request->file('images') as $file) {
-            $path = $file->store('products/temp', 'public');
-            $newImages[] = $path;
-        }
-    }
-
-    ProductUpdate::create([
-        'product_id' => $product->id,
-        'old_data' => $product->only([
-            'name',
-            'description',
-            'price',
-            'original_price',
-            'stock_quantity',
-            'category_id'
-        ]),
-        'new_data' => $request->except(['images']),
-        'old_images' => $product->images->pluck('image_path'),
-        'new_images' => $newImages,
-        'status' => 'pending'
-    ]);
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Modification envoyée pour validation'
-    ]);
-}
-            $product->update(
-                collect($request->except(['images', 'deleted_image_ids']))->toArray()
-            );
-         
-        }
-
+        // Validation des données
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
-            'price' => 'sometimes|numeric|min:0',
-            'original_price' => 'nullable|numeric|min:0',
-            'stock_quantity' => 'sometimes|integer|min:0',
             'category_id' => 'sometimes|exists:categories,id',
             'sub_category_id' => 'nullable|exists:sub_categories,id',
             'department_id' => 'sometimes|exists:departments,id',
             'payment_on_delivery' => 'boolean',
-
-            // 🔥 AJOUT IMPORTANT
+            
+            // Gestion des images
             'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:2048',
             'deleted_image_ids' => 'nullable|array',
             'deleted_image_ids.*' => 'integer|exists:product_images,id',
+            
+            // Gestion des variantes d'images
+            'image_variants' => 'nullable|array',
+            'image_variants.*.id' => 'nullable|integer|exists:product_image_variants,id',
+            'image_variants.*.image_id' => 'required|integer|exists:product_images,id',
+            'image_variants.*.color_name' => 'nullable|string',
+            'image_variants.*.color_code' => 'nullable|string',
+            'image_variants.*.price' => 'required|numeric|min:0',
+            'image_variants.*.original_price' => 'nullable|numeric|min:0',
+            'image_variants.*.stock_quantity' => 'required|integer|min:0',
+            'image_variants.*.sizes' => 'nullable|array',
+            'image_variants.*.sizes.*.id' => 'nullable|integer|exists:product_image_variant_sizes,id',
+            'image_variants.*.sizes.*.size_name' => 'required|string',
+            'image_variants.*.sizes.*.stock_quantity' => 'required|integer|min:0',
+            
+            // IDs à supprimer
+            'deleted_variant_ids' => 'nullable|array',
+            'deleted_variant_ids.*' => 'integer|exists:product_image_variants,id',
+            'deleted_size_ids' => 'nullable|array',
+            'deleted_size_ids.*' => 'integer|exists:product_image_variant_sizes,id',
         ]);
 
-$product->update(
-    collect($validated)->except(['images', 'deleted_image_ids'])->toArray()
-);
-        /*
-        |--------------------------------------------------------------------------
-        | SUPPRIMER LES IMAGES
-        |--------------------------------------------------------------------------
-        */
+        // Mettre à jour les informations de base
+        $updateData = collect($validated)->except([
+            'images', 
+            'deleted_image_ids', 
+            'image_variants', 
+            'deleted_variant_ids', 
+            'deleted_size_ids'
+        ])->toArray();
+        
+        // Si le produit était approuvé, repasser en pending
+        if ($product->status === 'approved') {
+            $updateData['status'] = 'pending';
+        }
+        
+        $product->update($updateData);
+
+        // ===========================================
+        // 1. SUPPRIMER LES IMAGES MARQUÉES
+        // ===========================================
         if ($request->has('deleted_image_ids')) {
             foreach ($request->deleted_image_ids as $imageId) {
-
                 $image = $product->images()->find($imageId);
-
                 if ($image) {
+                    // Supprimer le fichier physique
                     \Storage::disk('public')->delete($image->image_path);
                     $image->delete();
                 }
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | AJOUTER NOUVELLES IMAGES
-        |--------------------------------------------------------------------------
-        */
+        // ===========================================
+        // 2. AJOUTER LES NOUVELLES IMAGES
+        // ===========================================
+        $newImageIds = [];
         if ($request->hasFile('images')) {
-
-            foreach ($request->file('images') as $index => $file) {
-
+            foreach ($request->file('images') as $file) {
                 $path = $file->store('products', 'public');
-
-                $product->images()->create([
+                $image = $product->images()->create([
                     'image_path' => $path,
-                    'is_primary' => false,
+                    'sort_order' => $product->images()->count(),
                 ]);
+                $newImageIds[] = $image->id;
             }
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | METTRE À JOUR IMAGE PRINCIPALE SI NÉCESSAIRE
-        |--------------------------------------------------------------------------
-        */
-        $firstImage = $product->images()->first();
-        if ($firstImage) {
+        // ===========================================
+        // 3. SUPPRIMER LES VARIANTES MARQUÉES
+        // ===========================================
+        if ($request->has('deleted_variant_ids')) {
+            foreach ($request->deleted_variant_ids as $variantId) {
+                $variant = ProductImageVariant::find($variantId);
+                if ($variant && $variant->product_id === $product->id) {
+                    $variant->delete();
+                }
+            }
+        }
+
+        // ===========================================
+        // 4. SUPPRIMER LES TAILLES MARQUÉES
+        // ===========================================
+        if ($request->has('deleted_size_ids')) {
+            foreach ($request->deleted_size_ids as $sizeId) {
+                $size = ProductImageVariantSize::find($sizeId);
+                if ($size) {
+                    $size->delete();
+                }
+            }
+        }
+
+        // ===========================================
+        // 5. METTRE À JOUR LES VARIANTES
+        // ===========================================
+        if ($request->has('image_variants')) {
+            foreach ($request->image_variants as $variantData) {
+                // Si l'image_id est nouveau, trouver l'ID correspondant
+                $imageId = $variantData['image_id'];
+                
+                // Si c'est une variante existante
+                if (isset($variantData['id'])) {
+                    $variant = ProductImageVariant::find($variantData['id']);
+                    if ($variant && $variant->product_id === $product->id) {
+                        $variant->update([
+                            'image_id' => $imageId,
+                            'color_name' => $variantData['color_name'] ?? null,
+                            'color_code' => $variantData['color_code'] ?? null,
+                            'price' => $variantData['price'],
+                            'original_price' => $variantData['original_price'] ?? null,
+                            'stock_quantity' => $variantData['stock_quantity'],
+                        ]);
+                    }
+                } else {
+                    // Nouvelle variante
+                    $variant = ProductImageVariant::create([
+                        'product_id' => $product->id,
+                        'image_id' => $imageId,
+                        'color_name' => $variantData['color_name'] ?? null,
+                        'color_code' => $variantData['color_code'] ?? null,
+                        'price' => $variantData['price'],
+                        'original_price' => $variantData['original_price'] ?? null,
+                        'stock_quantity' => $variantData['stock_quantity'],
+                    ]);
+                }
+
+                // Gérer les tailles de cette variante
+                if (isset($variantData['sizes'])) {
+                    foreach ($variantData['sizes'] as $sizeData) {
+                        if (isset($sizeData['id'])) {
+                            // Mettre à jour une taille existante
+                            $size = ProductImageVariantSize::find($sizeData['id']);
+                            if ($size && $size->variant_id === $variant->id) {
+                                $size->update([
+                                    'size_name' => $sizeData['size_name'],
+                                    'stock_quantity' => $sizeData['stock_quantity'],
+                                ]);
+                            }
+                        } else {
+                            // Nouvelle taille
+                            ProductImageVariantSize::create([
+                                'variant_id' => $variant->id,
+                                'size_name' => $sizeData['size_name'],
+                                'stock_quantity' => $sizeData['stock_quantity'],
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // ===========================================
+        // 6. METTRE À JOUR LES PRIX MIN/MAX
+        // ===========================================
+        $variants = $product->imageVariants;
+        if ($variants->count() > 0) {
+            $minPrice = $variants->min('price');
+            $maxPrice = $variants->max('price');
+            $totalStock = $variants->sum('stock_quantity');
+            
             $product->update([
-                'image' => $firstImage->image_path
+                'price' => $minPrice,
+                'stock_quantity' => $totalStock,
             ]);
         }
 
         DB::commit();
 
+        // Charger le produit avec ses relations
+        $product->load(['images', 'imageVariants.image', 'imageVariants.sizes']);
+
         return response()->json([
             'success' => true,
             'message' => 'Produit mis à jour avec succès',
-            'product' => $product->fresh(['images', 'colorVariants', 'sizes']),
+            'product' => $product
         ]);
 
-    } catch (\Exception $e) {
-
+    } catch (\Illuminate\Validation\ValidationException $e) {
         DB::rollBack();
-
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur de validation',
+            'errors' => $e->errors()
+        ], 422);
+        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
         Log::error('❌ Erreur mise à jour produit', [
+            'id' => $id,
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ]);

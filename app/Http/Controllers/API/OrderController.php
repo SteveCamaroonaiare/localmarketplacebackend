@@ -71,18 +71,20 @@ class OrderController extends Controller
 public function store(Request $request)
 {
     try {
+        Log::info('🟡 Tentative de création commande', $request->all());
+
         $validator = Validator::make($request->all(), [
             'merchant_id' => 'required|exists:merchants,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
+            'items.*.variant_id' => 'nullable|exists:product_image_variants,id',
+            'items.*.size_id' => 'nullable|exists:product_image_variant_sizes,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_name' => 'required|string',
-            'customer_email' => 'nullable|email',
             'customer_phone' => 'required|string',
             'shipping_address' => 'required|string',
             'shipping_city' => 'required|string',
-            'payment_method' => 'required|in:cash,mobile_money,bank_transfer,card',
-            'customer_notes' => 'nullable|string',
+            'payment_method' => 'required|in:orange_money,mtn_momo,express_union,cash,card,bank_transfer,paypal',
         ]);
 
         if ($validator->fails()) {
@@ -94,37 +96,56 @@ public function store(Request $request)
 
         DB::beginTransaction();
 
-        // Calculer les totaux
         $subtotal = 0;
         $orderItems = [];
 
-          foreach ($request->items as $item) {
+        foreach ($request->items as $item) {
+            $product = Product::with(['imageVariants' => function($q) {
+                $q->with('sizes');
+            }])->findOrFail($item['product_id']);
 
-            $product = Product::lockForUpdate()
-                ->with('images')
-                ->findOrFail($item['product_id']);
-
-            $availableStock = $product->stock_quantity - $product->reserved_quantity;
-
-            if ($availableStock < $item['quantity']) {
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => "Stock insuffisant pour {$product->name}. Disponible: {$availableStock}"
-                ], 400);
+            // Déterminer le prix et gérer le stock
+            $unitPrice = $product->price;
+            
+            // Si variant_id est fourni
+            if (isset($item['variant_id'])) {
+                $variant = $product->imageVariants->find($item['variant_id']);
+                if ($variant) {
+                    $unitPrice = $variant->price;
+                    
+                    // Si size_id est fourni
+                    if (isset($item['size_id'])) {
+                        $size = $variant->sizes->find($item['size_id']);
+                        if ($size) {
+                            if ($size->stock_quantity < $item['quantity']) {
+                                throw new \Exception("Stock insuffisant pour la taille {$size->size_name}");
+                            }
+                            $size->decrement('stock_quantity', $item['quantity']);
+                        }
+                    } else {
+                        if ($variant->stock_quantity < $item['quantity']) {
+                            throw new \Exception("Stock insuffisant pour la variante");
+                        }
+                        $variant->decrement('stock_quantity', $item['quantity']);
+                    }
+                }
+            } else {
+                // Produit simple
+                if ($product->stock_quantity < $item['quantity']) {
+                    throw new \Exception("Stock insuffisant");
+                }
+                $product->decrement('stock_quantity', $item['quantity']);
             }
 
-            $itemSubtotal = $product->price * $item['quantity'];
+            $itemSubtotal = $unitPrice * $item['quantity'];
             $subtotal += $itemSubtotal;
 
-            // ✅ Réserver le stock
-            $product->increment('reserved_quantity', $item['quantity']);
-
+            // Récupérer l'image
             $imagePath = null;
             if ($product->images && $product->images->count() > 0) {
                 $primaryImage = $product->images->where('is_primary', true)->first();
-                $imagePath = $primaryImage
-                    ? $primaryImage->image_path
+                $imagePath = $primaryImage 
+                    ? $primaryImage->image_path 
                     : $product->images->first()->image_path;
             }
 
@@ -134,117 +155,177 @@ public function store(Request $request)
                 'product_description' => $product->description ?? '',
                 'product_image' => $imagePath,
                 'product_sku' => $product->sku ?? null,
-                'unit_price' => $product->price,
+                'variant_id' => $item['variant_id'] ?? null,
+                'size_id' => $item['size_id'] ?? null,
+                'unit_price' => $unitPrice,
                 'quantity' => $item['quantity'],
                 'subtotal' => $itemSubtotal,
                 'attributes' => isset($item['attributes']) ? json_encode($item['attributes']) : null,
-                'stock_deducted' => false,
             ];
         }
 
-        $shippingCost = $request->shipping_cost ?? 1000;
-        $discount = $request->discount ?? 0;
-        $total = $subtotal + $shippingCost - $discount;
+        $shippingCost = 1000; // À ajuster selon votre logique
+        $total = $subtotal ;
 
-        // Créer la commande
+        // ✅ Création de la commande avec TOUS les champs requis
         $order = Order::create([
             'user_id' => $request->user() ? $request->user()->id : null,
             'merchant_id' => $request->merchant_id,
-            'order_number' => Order::generateOrderNumber(),
+            'order_number' => 'ORD-' . time() . '-' . rand(1000, 9999),
             'status' => 'pending',
             'customer_name' => $request->customer_name,
-            'customer_email' => $request->customer_email ?? 'noemail@example.com',
+            'customer_email' => $request->customer_email ?? 'noemail@example.com', // REQUIRED
             'customer_phone' => $request->customer_phone,
             'shipping_address' => $request->shipping_address,
             'shipping_city' => $request->shipping_city,
             'shipping_country' => $request->shipping_country ?? 'Cameroun',
+            'delivery_type' => 'merchant', // REQUIRED with default
+            'delivery_status' => 'pending', // REQUIRED with default
             'subtotal' => $subtotal,
-            'shipping_cost' => $shippingCost,
+           // 'shipping_cost' => $shippingCost,
             'tax' => 0,
-            'discount' => $discount,
+            'discount' => 0,
             'total_price' => $total,
             'payment_method' => $request->payment_method,
             'payment_status' => 'pending',
-            'customer_notes' => $request->customer_notes,
+            'customer_notes' => $request->customer_notes ?? null,
         ]);
 
         // Créer les items
-        foreach ($orderItems as $item) {
-            $order->items()->create($item);
+        foreach ($orderItems as $itemData) {
+            $order->items()->create($itemData);
         }
-
-        // Charger les relations
-        $order->load('items.product.images', 'merchant');
-
-        // Récupérer le premier produit
-        $firstProductId = $order->items->first()->product_id ?? null;
 
         // Créer la conversation
         $conversation = Conversation::create([
             'order_id' => $order->id,
             'customer_id' => $order->user_id,
             'merchant_id' => $order->merchant_id,
-            'product_id' => $firstProductId,
+            'product_id' => $request->items[0]['product_id'] ?? null,
             'last_message_at' => now(),
         ]);
 
-        Log::info('✅ Conversation créée avec succès', [
-            'conversation_id' => $conversation->id,
-            'product_id' => $firstProductId,
-        ]);
-
-        // Message de bienvenue avec images
-        $productsList = $order->items->map(function($item) {
-            $attributes = '';
-            if ($item->attributes) {
-                $attrs = is_string($item->attributes) ? json_decode($item->attributes, true) : $item->attributes;
-                if ($attrs) {
-                    $attrStrings = [];
-                    if (isset($attrs['color'])) $attrStrings[] = "Couleur: {$attrs['color']}";
-                    if (isset($attrs['size'])) $attrStrings[] = "Taille: {$attrs['size']}";
-                    if (!empty($attrStrings)) {
-                        $attributes = ' (' . implode(', ', $attrStrings) . ')';
-                    }
-                }
+       // Message de bienvenue avec tous les détails
+$productsList = collect($orderItems)->map(function($item) {
+    // Récupérer les attributs s'ils existent
+    $attributes = '';
+    if (isset($item['attributes']) && $item['attributes']) {
+        $attrs = is_string($item['attributes']) 
+            ? json_decode($item['attributes'], true) 
+            : $item['attributes'];
+        
+        if ($attrs) {
+            $attrStrings = [];
+            if (isset($attrs['color']) && $attrs['color'] && $attrs['color'] !== 'Couleur unique') {
+                $attrStrings[] = "🎨 Couleur: {$attrs['color']}";
             }
-            return "• {$item->product_name}{$attributes} x{$item->quantity} = {$item->subtotal} FCFA";
-        })->join("\n");
-
-        // Récupérer les images
-        $productImages = $order->items->map(function($item) {
-            if ($item->product_image) {
-                return url('storage/' . $item->product_image);
+            if (isset($attrs['size']) && $attrs['size'] && $attrs['size'] !== 'Taille unique') {
+                $attrStrings[] = "📏 Taille: {$attrs['size']}";
             }
-            
-            if ($item->product && $item->product->images && $item->product->images->count() > 0) {
-                $primaryImage = $item->product->images->where('is_primary', true)->first();
-                $imagePath = $primaryImage 
-                    ? $primaryImage->image_path 
-                    : $item->product->images->first()->image_path;
-                return url('storage/' . $imagePath);
+            if (!empty($attrStrings)) {
+                $attributes = "\n     " . implode("\n     ", $attrStrings);
             }
-            
-            return null;
-        })->filter()->unique()->values()->toArray();
+        }
+    }
+    
+    // Format du prix avec séparateurs
+    $formattedPrice = number_format($item['unit_price'], 0, ',', ' ');
+    $formattedSubtotal = number_format($item['subtotal'], 0, ',', ' ');
+    
+    return "• **{$item['product_name']}**\n" .
+           "   Prix unitaire: {$formattedPrice} FCFA\n" .
+           "   Quantité: {$item['quantity']}\n" .
+           "   Sous-total: {$formattedSubtotal} FCFA" .
+           $attributes;
+})->join("\n\n");
 
-        Message::create([
-            'conversation_id' => $conversation->id,
-            'sender_id' => $order->merchant_id,
-            'sender_type' => 'merchant',
-            'content' => "🎉 Bonjour {$order->customer_name} !\n\n" .
-                         "Merci pour votre commande #{$order->order_number}.\n\n" .
-                         "📦 Articles commandés :\n{$productsList}\n\n" .
-                         "💰 Montant total : {$order->total_price} FCFA\n" .
-                         "📍 Livraison : {$order->shipping_address}, {$order->shipping_city}\n\n" .
-                         "Je confirme la disponibilité et reviens vers vous rapidement ! 😊",
-            'is_read' => false,
-            'attachments' => json_encode($productImages),
-        ]);
+// Dans votre contrôleur, quand vous créez le message
+$productImages = collect($orderItems)->map(function($item) {
+    if (isset($item['product_image']) && $item['product_image']) {
+        // S'assurer que l'URL est complète
+        return asset('storage/' . $item['product_image']);
+    }
+    
+    $product = \App\Models\Product::with('images')->find($item['product_id']);
+    if ($product && $product->images && $product->images->count() > 0) {
+        $primaryImage = $product->images->where('is_primary', true)->first();
+        $imagePath = $primaryImage 
+            ? $primaryImage->image_path 
+            : $product->images->first()->image_path;
+        
+        return asset('storage/' . $imagePath);
+    }
+    
+    return null;
+})->filter()->unique()->values()->toArray();
 
-        Log::info('✅ Message de bienvenue créé avec images', [
-            'conversation_id' => $conversation->id,
-            'images_count' => count($productImages),
-        ]);
+// Log pour déboguer
+Log::info('🖼️ Images envoyées:', $productImages);
+
+// Informations de livraison formatées
+$shippingInfo = "📍 **Adresse de livraison**\n" .
+                "   {$order->shipping_address}\n" .
+                "   {$order->shipping_city}, {$order->shipping_country}";
+
+// Récupérer les informations du client
+$customerInfo = "👤 **Client**\n" .
+                "   Nom: {$order->customer_name}\n" .
+                "   Tél: {$order->customer_phone}";
+
+// Ajouter l'email s'il existe
+if ($order->customer_email && $order->customer_email !== 'client@example.com') {
+    $customerInfo .= "\n   Email: {$order->customer_email}";
+}
+
+// Ajouter les notes du client si elles existent
+if ($order->customer_notes) {
+    $customerInfo .= "\n\n📝 **Notes du client**\n   {$order->customer_notes}";
+}
+
+// Construire le message complet
+$messageContent = "🎉 **NOUVELLE COMMANDE #{$order->order_number}**\n\n" .
+                  "Bonjour, vous avez reçu une nouvelle commande !\n\n" .
+                  "═══════════════════════════════\n\n" .
+                  "📦 **ARTICLES COMMANDÉS**\n\n" .
+                  "{$productsList}\n\n" .
+                  "═══════════════════════════════\n\n" .
+                  "💰 **RÉCAPITULATIF**\n" .
+                  "   Sous-total: " . number_format($order->subtotal, 0, ',', ' ') . " FCFA\n" ;
+               //   "   Livraison: " . number_format($order->shipping_cost, 0, ',', ' ') . " FCFA\n";
+                  
+// Ajouter la taxe si > 0
+if ($order->tax > 0) {
+    $messageContent .= "   Taxe: " . number_format($order->tax, 0, ',', ' ') . " FCFA\n";
+}
+
+// Ajouter la réduction si > 0
+if ($order->discount > 0) {
+    $messageContent .= "   Réduction: -" . number_format($order->discount, 0, ',', ' ') . " FCFA\n";
+}
+
+$messageContent .= "   **TOTAL: " . number_format($order->total_price, 0, ',', ' ') . " FCFA**\n\n" .
+                   "═══════════════════════════════\n\n" .
+                   "{$customerInfo}\n\n" .
+                   "{$shippingInfo}\n\n" .
+
+                   "═══════════════════════════════\n\n" .
+                   "Je vous confirme la disponibilité des articles et reviens vers vous rapidement pour organiser la livraison ! 😊\n\n" .
+                   "Merci pour votre confiance ! 🙏";
+
+// Créer le message avec les images en pièces jointes
+Message::create([
+    'conversation_id' => $conversation->id,
+    'sender_id' => $order->merchant_id,
+    'sender_type' => 'merchant',
+    'content' => $messageContent,
+    'is_read' => false,
+    'attachments' => json_encode($productImages),
+]);
+
+Log::info('✅ Message de bienvenue créé avec images', [
+    'conversation_id' => $conversation->id,
+    'images_count' => count($productImages),
+]);
 
         DB::commit();
 
@@ -262,13 +343,12 @@ public function store(Request $request)
         
         Log::error('❌ Erreur création commande', [
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
+            'trace' => $e->getTraceAsString()
         ]);
 
         return response()->json([
             'success' => false,
-            'message' => 'Erreur lors de la création de la commande',
-            'error' => $e->getMessage(),
+            'message' => $e->getMessage()
         ], 500);
     }
 }
@@ -706,48 +786,64 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
 
     /**
      * Récupérer la conversation d'une commande
-     */
-    public function getOrderConversation($orderId)
-    {
-        try {
-            $user = auth()->user();
-            
-            $order = Order::whereHas('merchant', function($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })->findOrFail($orderId);
+     */public function getOrderConversation($orderId)
+{
+    try {
+        $user = auth()->user();
+        
+        $order = Order::whereHas('merchant', function($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->findOrFail($orderId);
 
-            $conversation = Conversation::with([
-                'messages.sender:id,name,email',
-                'customer:id,name,email,avatar',
-                'order:id,order_number,customer_name,customer_phone,shipping_address,shipping_city',
-                'order.items'
-            ])
-            ->where('order_id', $order->id)
-            ->firstOrFail();
+        $conversation = Conversation::with([
+            'messages.sender:id,name,email',
+            'customer:id,name,email,avatar',
+            'order:id,order_number,customer_name,customer_phone,shipping_address,shipping_city',
+            'order.items' => function($query) {
+                $query->with(['product' => function($q) {
+                    $q->with(['images' => function($img) {
+                        $img->orderBy('is_primary', 'desc')->orderBy('sort_order');
+                    }]);
+                }]);
+            }
+        ])
+        ->where('order_id', $order->id)
+        ->firstOrFail();
 
-            // Marquer les messages du client comme lus
-            $conversation->messages()
-                ->where('sender_id', '!=', $user->id)
-                ->where('is_read', false)
-                ->update(['is_read' => true, 'read_at' => now()]);
+        // Marquer les messages du client comme lus
+        $conversation->messages()
+            ->where('sender_id', '!=', $user->id)
+            ->where('is_read', false)
+            ->update(['is_read' => true, 'read_at' => now()]);
 
-            return response()->json([
-                'success' => true,
-                'data' => $conversation
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Erreur conversation commande', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Conversation introuvable'
-            ], 404);
+        // Enrichir les items avec l'URL de l'image
+        if ($conversation->order && $conversation->order->items) {
+            foreach ($conversation->order->items as $item) {
+                if ($item->product && $item->product->images && $item->product->images->count() > 0) {
+                    $primaryImage = $item->product->images->where('is_primary', true)->first();
+                    $item->product_image_url = $primaryImage 
+                        ? asset('storage/' . $primaryImage->image_path)
+                        : asset('storage/' . $item->product->images->first()->image_path);
+                }
+            }
         }
-    }
 
+        return response()->json([
+            'success' => true,
+            'data' => $conversation
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur conversation commande', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Conversation introuvable'
+        ], 404);
+    }
+}
     /**
      * Envoyer un message au client depuis le dashboard
      */

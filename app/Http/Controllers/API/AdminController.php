@@ -423,42 +423,84 @@ class AdminController extends Controller
      * Détails d'une commande
      */
     public function orderDetails($id)
-    {
-        try {
-            $order = Order::with([
-                'items.product.images',
-                'merchant:id,name,shop_name,email,phone,user_id',
-                'user:id,name,email'
-            ])->findOrFail($id);
+{
+    try {
+        $order = Order::with([
+            'items.product.images',
+            'merchant:id,name,shop_name,email,phone,user_id',
+            'user:id,name,email'
+        ])->findOrFail($id);
 
-            // Conversation
-            $conversation = Conversation::with(['messages.sender'])
-                ->where('order_id', $order->id)
-                ->first();
-
-            // Commission
-            $commissionRate = 0.03;
-            $order->commission = $order->total_price * $commissionRate;
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'order' => $order,
-                    'conversation' => $conversation,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Erreur détails commande admin', [
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Commande introuvable'
-            ], 404);
+        // ✅ Enrichir les items avec les URLs complètes des images
+        foreach ($order->items as $item) {
+            if ($item->product && $item->product->images && $item->product->images->count() > 0) {
+                $primaryImage = $item->product->images->where('is_primary', true)->first();
+                $imagePath = $primaryImage 
+                    ? $primaryImage->image_path 
+                    : $item->product->images->first()->image_path;
+                
+                // Ajouter l'URL complète à l'item
+                $item->product_image_url = asset('storage/' . $imagePath);
+                $item->product_image_thumb = asset('storage/' . $imagePath);
+            }
+            
+            // Parser les attributs pour faciliter l'affichage
+            if ($item->attributes) {
+                $item->parsed_attributes = is_string($item->attributes) 
+                    ? json_decode($item->attributes, true) 
+                    : $item->attributes;
+            }
         }
+
+        // Conversation
+        $conversation = Conversation::with(['messages.sender'])
+            ->where('order_id', $order->id)
+            ->first();
+
+        // Enrichir les messages avec les URLs complètes des attachments
+        if ($conversation && $conversation->messages) {
+            foreach ($conversation->messages as $message) {
+                if ($message->attachments) {
+                    $attachments = is_string($message->attachments) 
+                        ? json_decode($message->attachments, true) 
+                        : $message->attachments;
+                    
+                    if (is_array($attachments)) {
+                        foreach ($attachments as &$attachment) {
+                            if (is_string($attachment) && !str_starts_with($attachment, 'http')) {
+                                $attachment = asset('storage/' . $attachment);
+                            }
+                        }
+                        $message->attachments = $attachments;
+                    }
+                }
+            }
+        }
+
+        // Commission
+        $commissionRate = 0.03;
+        $order->commission = $order->total_price * $commissionRate;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'order' => $order,
+                'conversation' => $conversation,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur détails commande admin', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Commande introuvable'
+        ], 404);
     }
+}
 
     /**
      * Commandes récentes (pour le dashboard)

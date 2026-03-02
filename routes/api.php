@@ -35,6 +35,7 @@ use App\Http\Controllers\API\MerchantPublicController;
    use App\Http\Controllers\API\CustomerController;
    use App\Http\Controllers\API\Customer\WishlistController;
    use App\Http\Controllers\API\CheckoutController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes

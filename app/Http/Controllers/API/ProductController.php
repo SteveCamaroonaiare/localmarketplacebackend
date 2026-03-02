@@ -4,10 +4,16 @@ namespace App\Http\Controllers\API;
 
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\Department;
+use App\Models\ProductImageVariant;
+use App\Models\ProductImageVariantSize;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\ColorVariant;
 use App\Models\Size;
+use App\Models\Merchant;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
@@ -157,63 +163,61 @@ private function getProductImage($product)
     }
 
     // Récupérer un produit spécifique
-  public function show($id)
+public function show($id)
 {
-    $product = Product::with([
-        'colorVariants.sizes',
-        'colorVariants.images',
-        'sizes',
-        'images',
-        'merchant'
-    ])
-    ->where('status', 'approved')
-    ->find($id);
+    try {
+        Log::info('🟡 Tentative de récupération produit', ['id' => $id]);
+        
+        $product = Product::with([
+            'merchant:id,name,shop_name,email,phone,country',
+            'images' => function($query) {
+                $query->orderBy('sort_order');
+            },
+            'category:id,name',
+            'subCategory:id,name',
+            'imageVariants' => function($query) {
+                $query->with(['image', 'sizes']);
+            },
+        ])->findOrFail($id);
 
-    if (!$product) {
+        Log::info('🟢 Produit trouvé', [
+            'id' => $product->id,
+            'name' => $product->name,
+            'variants_count' => $product->imageVariants->count()
+        ]);
+
+        // Enrichir avec les prix min/max
+        $product->min_price = $product->imageVariants->min('price') ?? $product->price;
+        $product->max_price = $product->imageVariants->max('price') ?? $product->price;
+
         return response()->json([
-            'error' => 'Produit non trouvé ou non disponible'
+            'success' => true,
+            'product' => $product
+        ]);
+
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        Log::error('❌ Produit non trouvé', ['id' => $id]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Produit introuvable'
         ], 404);
+        
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur récupération produit', [
+            'id' => $id,
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors du chargement du produit',
+            'debug' => config('app.debug') ? $e->getMessage() : null
+        ], 500);
     }
-
-    // Transformer images produit
-    $images = $product->images->map(function ($image) {
-        return [
-            'id' => $image->id,
-            'image_url' => asset('storage/' . $image->image_path),
-            'is_primary' => $image->is_primary,
-        ];
-    });
-
-    // Transformer color variants
-    $product->colorVariants->each(function ($variant) {
-        $variant->images = $variant->images->map(function ($image) {
-            return [
-                'id' => $image->id,
-                'image_url' => asset('storage/' . $image->image_path),
-                'is_primary' => $image->is_primary,
-            ];
-        });
-    });
-
-    return response()->json([
-        'id' => $product->id,
-        'name' => $product->name,
-        'price' => $product->price,
-        'original_price' => $product->original_price,
-        'description' => $product->description,
-        'stock_quantity' => $product->stock_quantity,
-
-        // ✅ AJOUT IMPORTANT
-        'image' => $images->first()['image_url'] ?? null,
-
-        'images' => $images,
-        'sizes' => $product->sizes,
-        'color_variants' => $product->colorVariants,
-        'has_color_variants' => $product->colorVariants->count() > 0,
-        'merchant' => $product->merchant,
-    ]);
 }
-
 
     // Récupérer les produits par catégorie
     public function byCategory($categoryId)
@@ -492,4 +496,45 @@ return response()->json(
 
         return response()->json(['message' => 'Stock restauré']);
     }
+    // Dans ProductController
+public function getVariant(Request $request, $productId)
+{
+    try {
+        $validated = $request->validate([
+            'color' => 'nullable|string',
+            'size' => 'nullable|string',
+        ]);
+
+        $query = ProductVariant::where('product_id', $productId)
+            ->where('is_available', true);
+
+        if (isset($validated['color'])) {
+            $query->where('color_name', $validated['color']);
+        }
+
+        if (isset($validated['size'])) {
+            $query->where('size_name', $validated['size']);
+        }
+
+        $variant = $query->with('images')->first();
+
+        if (!$variant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Variante non disponible'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $variant
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de la récupération'
+        ], 500);
+    }
+}
 }

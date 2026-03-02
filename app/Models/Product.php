@@ -186,41 +186,26 @@ public function getAvailableSizesAttribute()
 }
 
 // Prix minimum (pour affichage liste produits)
+public function imageVariants()
+{
+    return $this->hasMany(ProductImageVariant::class);
+}
+
+// Prix minimum/maximum
 public function getMinPriceAttribute()
 {
-    return $this->variants()->min('price') ?? $this->price;
+    return $this->imageVariants()->min('price') ?? $this->price;
 }
 
-// Prix maximum
 public function getMaxPriceAttribute()
 {
-    return $this->variants()->max('price') ?? $this->price;
+    return $this->imageVariants()->max('price') ?? $this->price;
 }
 
-// Stock total de toutes les variantes
+// Stock total
 public function getTotalStockAttribute()
 {
-    return $this->variants()->sum('stock_quantity');
+    return $this->imageVariants()->sum('stock_quantity');
 }
-
-
-    // app/Models/Product.php
-
-// Ajoutez ces accessors
-/**private function generateBadge($product)
-{
-    // Badge "Nouveau" si créé il y a moins de 7 jours
-    if ($product->created_at->diffInDays(now()) <= 7) {
-        return 'Nouveau';
-    }
-    
-    // Badge "Promo" si prix réduit
-    if ($product->original_price > $product->price) {
-        $discount = round((($product->original_price - $product->price) / $product->original_price) * 100);
-        return "-{$discount}%";
-    }
-    
-    return null;
-} */
 
 }
