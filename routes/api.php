@@ -33,7 +33,7 @@ use App\Http\Controllers\API\MerchantPublicController;
   use App\Http\Controllers\API\MerchantSubscriptionController;  
   use App\Http\Controllers\API\ProfileOrderController;
    use App\Http\Controllers\API\CustomerController;
-   use App\Http\Controllers\API\Customer\WishlistController;
+   use App\Http\Controllers\API\Customer\WishListController;
    use App\Http\Controllers\API\CheckoutController;
 
 /*
@@ -620,11 +620,11 @@ Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
 // routes/api.php
 
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {
-    Route::get('/wishlist', [WishlistController::class, 'index']);
-    Route::post('/wishlist', [WishlistController::class, 'store']);
-    Route::delete('/wishlist/{productId}', [WishlistController::class, 'destroy']);
-    Route::get('/wishlist/check/{productId}', [WishlistController::class, 'check']);
-    Route::post('/wishlist/migrate-guest', [WishlistController::class, 'migrateGuest']);
+    Route::get('/wishlist', [WishListController::class, 'index']);
+    Route::post('/wishlist', [WishListController::class, 'store']);
+    Route::delete('/wishlist/{productId}', [WishListController::class, 'destroy']);
+    Route::get('/wishlist/check/{productId}', [WishListController::class, 'check']);
+    Route::post('/wishlist/migrate-guest', [WishListController::class, 'migrateGuest']);
 });
 
 
