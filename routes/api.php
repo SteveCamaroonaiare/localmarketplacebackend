@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Http\Controllers\API\AuthController;
-
+use App\Http\Controllers\API\AdminAuthController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\ProductController; 
@@ -567,6 +567,8 @@ Route::get('/debug-products', function () {
 
 // routes/api.php
 
+
+
 Route::get('/products-test', function() {
     $products = \App\Models\Product::with('merchant')
         ->where('status', 'approved')
@@ -683,4 +685,19 @@ Route::post('/reset-password', function (Request $request) {
     return $status === Password::PASSWORD_RESET
         ? response()->json(['message' => 'Mot de passe réinitialisé'])
         : response()->json(['message' => 'Token invalide'], 400);
+});
+
+// routes/api.php
+
+// Routes d'authentification admin (PUBLIQUES - pas de middleware)
+Route::prefix('admin')->group(function () {
+    Route::post('/login', [AdminAuthController::class, 'login']);
+    // Pas de register pour les admins (ils sont créés par super-admin)
+});
+
+// Routes protégées admin (avec middleware)
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::post('/logout', [AdminAuthController::class, 'logout']);
+    Route::get('/me', [AdminAuthController::class, 'me']);
+    // Vos autres routes admin
 });

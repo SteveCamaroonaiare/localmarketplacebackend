@@ -285,10 +285,10 @@ if ($order->customer_notes) {
 // Construire le message complet
 $messageContent = "🎉 **NOUVELLE COMMANDE #{$order->order_number}**\n\n" .
                   "Bonjour, vous avez reçu une nouvelle commande !\n\n" .
-                  "═══════════════════════════════\n\n" .
+                  "════════════════════\n\n" .
                   "📦 **ARTICLES COMMANDÉS**\n\n" .
                   "{$productsList}\n\n" .
-                  "═══════════════════════════════\n\n" .
+                  "════════════════════\n\n" .
                   "💰 **RÉCAPITULATIF**\n" .
                   "   Sous-total: " . number_format($order->subtotal, 0, ',', ' ') . " FCFA\n" ;
                //   "   Livraison: " . number_format($order->shipping_cost, 0, ',', ' ') . " FCFA\n";
@@ -304,11 +304,11 @@ if ($order->discount > 0) {
 }
 
 $messageContent .= "   **TOTAL: " . number_format($order->total_price, 0, ',', ' ') . " FCFA**\n\n" .
-                   "═══════════════════════════════\n\n" .
+                   "════════════════════\n\n" .
                    "{$customerInfo}\n\n" .
                    "{$shippingInfo}\n\n" .
 
-                   "═══════════════════════════════\n\n" .
+                   "════════════════════\n\n" .
                    "Je vous confirme la disponibilité des articles et reviens vers vous rapidement pour organiser la livraison ! 😊\n\n" .
                    "Merci pour votre confiance ! 🙏";
 
