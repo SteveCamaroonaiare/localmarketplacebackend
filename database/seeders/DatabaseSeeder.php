@@ -44,22 +44,22 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Smartphones & Téléphones',
                         'description' => 'Smartphones, téléphones portables et accessoires',
-                        'image' => '/assets/electronics/phones.jpg'
+                        'image' => '/assets/phones.jfif'
                     ],
                     [
                         'name' => 'Ordinateurs & Accessoires',
                         'description' => 'PC portables, ordinateurs de bureau, composants',
-                        'image' => '/assets/electronics/computers.jpg'
+                        'image' => '/assets/computers.jfif'
                     ],
                     [
                         'name' => 'Audio & Écouteurs',
                         'description' => 'Casques, écouteurs, enceintes Bluetooth',
-                        'image' => '/assets/electronics/audio.jpg'
+                        'image' => '/assets/audio.jfif'
                     ],
                     [
                         'name' => 'Gaming & Console',
                         'description' => 'Consoles de jeux, manettes, jeux vidéo',
-                        'image' => '/assets/electronics/gaming.jpg'
+                        'image' => '/assets/gaming.jfif'
                     ]
                 ]
             ],
@@ -70,27 +70,27 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Vêtements Hommes',
                         'description' => 'T-shirts, chemises, pantalons, costumes',
-                        'image' => '/assets/fashion/men-clothing.jpg'
+                        'image' => '/assets/men-clothing.jfif'
                     ],
                     [
                         'name' => 'Vêtements Femmes',
                         'description' => 'Robes, jupes, tops, ensembles',
-                        'image' => '/assets/fashion/women-clothing.jpg'
+                        'image' => '/assets/women-clothing.jfif'
                     ],
                     [
                         'name' => 'Vêtements Enfants',
                         'description' => 'Vêtements pour bébés et enfants',
-                        'image' => '/assets/fashion/kids-clothing.jpg'
+                        'image' => '/assets/kids-clothing.jfif'
                     ],
                     [
                         'name' => 'Chaussures',
                         'description' => 'Chaussures pour hommes, femmes et enfants',
-                        'image' => '/assets/fashion/shoes.jpg'
+                        'image' => '/assets/shoes.jfif'
                     ],
                     [
                         'name' => 'Accessoires Mode',
                         'description' => 'Sacs, montres, bijoux, ceintures',
-                        'image' => '/assets/fashion/accessories.jpg'
+                        'image' => '/assets/accessories.jfif'
                     ]
                 ]
             ],
@@ -101,22 +101,22 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Meubles & Décoration',
                         'description' => 'Canapés, lits, tables, décoration intérieure',
-                        'image' => '/assets/home/furniture.jpg'
+                        'image' => '/assets/furniture.jfif'
                     ],
                     [
                         'name' => 'Électroménager',
                         'description' => 'Réfrigérateurs, machines à laver, cuisinières',
-                        'image' => '/assets/home/appliances.jpg'
+                        'image' => '/assets/appliances.jfif'
                     ],
                     [
                         'name' => 'Cuisine & Art de la Table',
                         'description' => 'Ustensiles, vaisselle, appareils de cuisine',
-                        'image' => '/assets/home/kitchen.jpg'
+                        'image' => '/assets/kitchen.jfif'
                     ],
                     [
                         'name' => 'Jardin & Extérieur',
                         'description' => 'Mobilier de jardin, outils, barbecue',
-                        'image' => '/assets/home/garden.jpg'
+                        'image' => '/assets/garden.jfif'
                     ]
                 ]
             ],
@@ -127,22 +127,22 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Cosmétiques & Maquillage',
                         'description' => 'Produits de beauté, maquillage, soins visage',
-                        'image' => '/assets/beauty/cosmetics.jpg'
+                        'image' => '/assets/cosmetics.jfif'
                     ],
                     [
                         'name' => 'Soins Corporels',
                         'description' => 'Crèmes, lotions, produits de douche',
-                        'image' => '/assets/beauty/body-care.jpg'
+                        'image' => '/assets/body-care.jfif'
                     ],
                     [
                         'name' => 'Parfums & Fragrances',
                         'description' => 'Parfums, eaux de toilette, diffuseurs',
-                        'image' => '/assets/beauty/fragrances.jpg'
+                        'image' => '/assets/fragrances.jfif'
                     ],
                     [
                         'name' => 'Santé & Bien-être',
                         'description' => 'Compléments alimentaires, matériel médical',
-                        'image' => '/assets/beauty/health.jpg'
+                        'image' => '/assets/health.jfif'
                     ]
                 ]
             ],
@@ -153,22 +153,22 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Équipement Sportif',
                         'description' => 'Matériel de fitness, sports collectifs',
-                        'image' => '/assets/sports/equipment.jpg'
+                        'image' => '/assets/equipment.jfif'
                     ],
                     [
                         'name' => 'Vêtements Sport',
                         'description' => 'Tenues de sport, chaussures de running',
-                        'image' => '/assets/sports/clothing.jpg'
+                        'image' => '/assets/clothing.jfif'
                     ],
                     [
                         'name' => 'Plein Air & Randonnée',
                         'description' => 'Tentes, sacs à dos, équipement camping',
-                        'image' => '/assets/sports/outdoor.jpg'
+                        'image' => '/assets/outdoor.jfif'
                     ],
                     [
                         'name' => 'Vélos & Accessoires',
                         'description' => 'Vélos, casques, équipement cyclisme',
-                        'image' => '/assets/sports/bikes.jpg'
+                        'image' => '/assets/bikes.png'
                     ]
                 ]
             ],
@@ -179,17 +179,17 @@ class DatabaseSeeder extends Seeder
                     [
                         'name' => 'Jouets & Jeux',
                         'description' => 'Jouets éducatifs, jeux de société, poupées',
-                        'image' => '/assets/kids/toys.jpg'
+                        'image' => '/assets/toys.jfif'
                     ],
                     [
                         'name' => 'Puériculture',
                         'description' => 'Poussettes, sièges auto, articles bébé',
-                        'image' => '/assets/kids/baby-care.jpg'
+                        'image' => '/assets/baby-care.jfif'
                     ],
                     [
                         'name' => 'Fournitures Scolaires',
                         'description' => 'Cartables, cahiers, stylos, calculatrices',
-                        'image' => '/assets/kids/school.jpg'
+                        'image' => '/assets/school.jfif'
                     ]
                 ]
             ]
@@ -306,236 +306,6 @@ class DatabaseSeeder extends Seeder
                 ]
             ],
 
-            // MODE - Vêtements Hommes
-            [
-                'name' => 'Costume Business Classique Homme',
-                'description' => 'Costume élégant pour occasions professionnelles. Tissu en laine premium, coupe moderne, confort exceptionnel. Idéal pour entretiens et réunions importantes.',
-                'price' => '85000',
-                'original_price' => '120000',
-                'image' => '/assets/products/men-suit.jpg',
-                'rating' => 4.6,
-                'reviews' => 189,
-                'seller' => 'Fashion Elite',
-                'location' => 'Yaoundé, Cameroun',
-                'badge' => 'Top Vente',
-                'category_id' => 2,
-                'sub_category_id' => 5,
-                'department_id' => $departmentMode->id,   
-                'stock_quantity' => 78,
-                'sexe' => 'H', // HOMME
-                'age_group' => 'adult',
-                'restock_frequency' => '1 mois',
-                'return_policy' => true,
-                'payment_on_delivery' => true,
-                'has_color_variants' => true,
-                'default_color' => 'Bleu Navy',
-                'default_color_code' => '#000080',
-                'variants' => [
-                    [
-                        'color_name' => 'Bleu Navy',
-                        'color_code' => '#000080',
-                        'price' => '85000',
-                        'original_price' => '120000',
-                        'stock_quantity' => 30,
-                        'images' => [
-                            '/assets/products/suit-navy-1.jpg',
-                            '/assets/products/suit-navy-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => 'S', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 8],
-                            ['name' => 'M', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 10],
-                            ['name' => 'L', 'price' => '85000', 'original_price' => '120000', 'stock_quantity' => 7],
-                            ['name' => 'XL', 'price' => '87000', 'original_price' => '122000', 'stock_quantity' => 5]
-                        ]
-                    ],
-                    [
-                        'color_name' => 'Noir Classique',
-                        'color_code' => '#000000',
-                        'price' => '88000',
-                        'original_price' => '125000',
-                        'stock_quantity' => 25,
-                        'images' => [
-                            '/assets/products/suit-black-1.jpg',
-                            '/assets/products/suit-black-2.jpg'
-                        ],
-                        'sizes' => [
-                            ['name' => 'S', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 6],
-                            ['name' => 'M', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 8],
-                            ['name' => 'L', 'price' => '88000', 'original_price' => '125000', 'stock_quantity' => 7],
-                            ['name' => 'XL', 'price' => '90000', 'original_price' => '127000', 'stock_quantity' => 4]
-                        ]
-                    ]
-                ]
-            ],
-
-            // MAISON - Électroménager
-            [
-                'name' => 'Réfrigérateur Samsung Twin Cooling Plus',
-                'description' => 'Réfrigérateur américain 500L avec technologie Twin Cooling, distributeur d\'eau et de glace, classe énergétique A++. Design élégant et fonctionnalités avancées.',
-                'price' => '650000',
-                'original_price' => '780000',
-                'image' => '/assets/products/fridge-samsung.jpg',
-                'rating' => 4.7,
-                'reviews' => 234,
-                'seller' => 'ElectroHome',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Économie d\'énergie',
-                'category_id' => 3,
-                'sub_category_id' => 10,
-                'department_id' => $departmentMaison->id,
-                'stock_quantity' => 12,
-                 'sexe' => null, 
-                'age_group' => null,
-                'restock_frequency' => '2 mois',
-                'return_policy' => true,
-                'payment_on_delivery' => false,
-                'has_color_variants' => true,
-                'default_color' => 'Inox Brossé',
-                'default_color_code' => '#C0C0C0',
-                'variants' => [
-                    [
-                        'color_name' => 'Inox Brossé',
-                        'color_code' => '#C0C0C0',
-                        'price' => '650000',
-                        'original_price' => '780000',
-                        'stock_quantity' => 8,
-                        'images' => [
-                            '/assets/products/fridge-stainless-1.jpg',
-                            '/assets/products/fridge-stainless-2.jpg'
-                        ],
-                        'sizes' => []
-                    ],
-                    [
-                        'color_name' => 'Noir Mat',
-                        'color_code' => '#333333',
-                        'price' => '670000',
-                        'original_price' => '800000',
-                        'stock_quantity' => 4,
-                        'images' => [
-                            '/assets/products/fridge-black-1.jpg',
-                            '/assets/products/fridge-black-2.jpg'
-                        ],
-                        'sizes' => []
-                    ]
-                ]
-            ],
-
-            // BEAUTÉ - Parfums
-            [
-                'name' => 'Parfum Channel N°5 Eau de Parfum',
-                'description' => 'Parfum iconique aux notes florales-aldéhydées. Flacon collector, sillage exceptionnel, tenue longue durée. Le parfum de légende depuis 1921.',
-                'price' => '125000',
-                'original_price' => '150000',
-                'image' => '/assets/products/chanel-perfume.jpg',
-                'rating' => 4.9,
-                'reviews' => 456,
-                'seller' => 'Luxury Beauty',
-                'location' => 'Yaoundé, Cameroun',
-                'badge' => 'Produit Premium',
-                'category_id' => 4,
-                'sub_category_id' => 16,
-                'department_id' => $departmentBeaute->id,
-                'stock_quantity' => 25,
-                 'sexe' => null, 
-                'age_group' => null,
-                'restock_frequency' => '3 semaines',
-                'return_policy' => false,
-                'payment_on_delivery' => true,
-                'has_color_variants' => false,
-                'default_color' => 'Ambre',
-                'default_color_code' => '#D4AF37',
-                'variants' => [],
-                'images' => [
-                    '/assets/products/chanel-perfume-1.jpg',
-                    '/assets/products/chanel-perfume-2.jpg',
-                    '/assets/products/chanel-perfume-3.jpg'
-                ]
-            ],
-
-            // SPORTS - Équipement
-            [
-                'name' => 'Tapis de Course Pliable Electrique',
-                'description' => 'Tapis de course motorisé 2.5HP, pliable, écran LCD, 12 programmes automatiques. Parfait pour fitness à domicile, supporte jusqu\'à 120kg.',
-                'price' => '320000',
-                'original_price' => '450000',
-                'image' => '/assets/products/treadmill.jpg',
-                'rating' => 4.5,
-                'reviews' => 167,
-                'seller' => 'Sport Equipment',
-                'location' => 'Douala, Cameroun',
-                'badge' => 'Promo Fitness',
-                'category_id' => 5,
-                'sub_category_id' => 17,
-                'department_id' => $departmentSports->id,
-                'stock_quantity' => 8,
-                 'sexe' => null, 
-                'age_group' => null,
-                'restock_frequency' => '1 mois',
-                'return_policy' => true,
-                'payment_on_delivery' => false,
-                'has_color_variants' => true,
-                'default_color' => 'Noir et Rouge',
-                'default_color_code' => '#FF0000',
-                'variants' => [
-                    [
-                        'color_name' => 'Noir et Rouge',
-                        'color_code' => '#FF0000',
-                        'price' => '320000',
-                        'original_price' => '450000',
-                        'stock_quantity' => 5,
-                        'images' => [
-                            '/assets/products/treadmill-red-1.jpg',
-                            '/assets/products/treadmill-red-2.jpg'
-                        ],
-                        'sizes' => []
-                    ],
-                    [
-                        'color_name' => 'Noir et Bleu',
-                        'color_code' => '#0000FF',
-                        'price' => '325000',
-                        'original_price' => '455000',
-                        'stock_quantity' => 3,
-                        'images' => [
-                            '/assets/products/treadmill-blue-1.jpg',
-                            '/assets/products/treadmill-blue-2.jpg'
-                        ],
-                        'sizes' => []
-                    ]
-                ]
-            ],
-
-            // ENFANTS - Jouets
-            [
-                'name' => 'Set de Construction LEGO City',
-                'description' => 'Set LEGO 1500 pièces avec figurines, véhicules et bâtiments. Développe la créativité et la motricité fine. Âge recommandé: 6-12 ans.',
-                'price' => '45000',
-                'original_price' => '65000',
-                'image' => '/assets/products/lego-set.jpg',
-                'rating' => 4.8,
-                'reviews' => 289,
-                'seller' => 'Toy World',
-                'location' => 'Yaoundé, Cameroun',
-                'badge' => 'Éducatif',
-                'category_id' => 6,
-                
-                'sub_category_id' => 22,
-                'department_id' => $departmentEnfants->id,
-                'stock_quantity' => 34,
-                 'sexe' => null, 
-                'age_group' => 'child',
-                'restock_frequency' => '2 semaines',
-                'return_policy' => true,
-                'payment_on_delivery' => true,
-                'has_color_variants' => false,
-                'default_color' => 'Multicolore',
-                'default_color_code' => null,
-                'variants' => [],
-                'images' => [
-                    '/assets/products/lego-1.jpg',
-                    '/assets/products/lego-2.jpg',
-                    '/assets/products/lego-3.jpg'
-                ]
-            ]
         ];
 
         // Création des produits
