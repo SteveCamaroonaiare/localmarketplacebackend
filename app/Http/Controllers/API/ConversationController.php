@@ -194,4 +194,40 @@ class ConversationController extends Controller
             ], 500);
         }
     }
+    // app/Http/Controllers/API/ConversationController.php
+
+public function migrateGuest(Request $request)
+{
+    try {
+        $user = $request->user();
+        $conversationIds = $request->input('conversation_ids', []);
+
+        if (empty($conversationIds)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Aucune conversation à migrer'
+            ]);
+        }
+
+        // Mettre à jour les conversations guest pour les lier à l'utilisateur connecté
+        Conversation::whereIn('id', $conversationIds)
+            ->whereNull('customer_id')
+            ->update(['customer_id' => $user->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Conversations migrées avec succès'
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Erreur migration conversations guest', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de la migration'
+        ], 500);
+    }
+}
 }

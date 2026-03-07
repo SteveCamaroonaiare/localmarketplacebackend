@@ -607,7 +607,7 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
         }
 
         $orders = $query->orderBy('created_at', 'desc')
-            ->paginate(20);
+            ->paginate(100);
 
         // Ajouter le compteur de messages non lus
         foreach ($orders as $order) {

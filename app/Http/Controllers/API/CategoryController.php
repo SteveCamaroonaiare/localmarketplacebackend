@@ -92,6 +92,8 @@ class CategoryController extends Controller
         
         $products = Product::with(['colorVariants', 'images'])
             ->where('sub_category_id', $subCategoryId)
+            ->where('status', 'approved')  // ← AJOUTER CETTE LIGNE
+
             ->get();
 
         \Log::info("Produits trouvés: " . $products->count());

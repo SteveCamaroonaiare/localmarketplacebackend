@@ -35,6 +35,8 @@ use App\Http\Controllers\API\MerchantPublicController;
    use App\Http\Controllers\API\CustomerController;
    use App\Http\Controllers\API\Customer\WishListController;
    use App\Http\Controllers\API\CheckoutController;
+   use App\Http\Controllers\API\StockController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -588,6 +590,9 @@ Route::get('/products-test', function() {
 //Profile
 
 
+    Route::post('/check-stock', [StockController::class, 'checkStock']);
+    Route::post('/check-multiple-stocks', [StockController::class, 'checkMultipleStocks']);
+    Route::post('/verify-price', [StockController::class, 'verifyPrice']);
 
 // Routes client authentifié
 Route::middleware('auth:sanctum')->prefix('customer')->group(function () {

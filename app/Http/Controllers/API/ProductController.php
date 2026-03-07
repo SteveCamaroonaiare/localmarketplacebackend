@@ -222,13 +222,15 @@ public function show($id)
     // Récupérer les produits par catégorie
     public function byCategory($categoryId)
     {
+        try{
         $category = Category::find($categoryId);
 
         if (!$category) {
             return response()->json(['message' => 'Catégorie non trouvée'], 404);
         }
 
-        $products = Product::with('variants', 'merchant')
+        $products = Product::with( 'merchant','images',
+            'imageVariants')
             ->where('category_id', $categoryId)
             ->where('status', 'approved') // ⚠️ IMPORTANT
             ->get();
@@ -237,6 +239,17 @@ public function show($id)
             'category' => $category,
             'products' => $products
         ]);
+          } catch (\Exception $e) {
+        Log::error('❌ Erreur dans byCategory', [
+            'category_id' => $categoryId,
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors du chargement des produits'
+        ], 500);
+    }
     }
 
     // Produits vedettes pour la page d'accueil
@@ -324,7 +337,7 @@ return response()->json(
                 $q->where('name', 'like', "%{$query}%")
                   ->orWhere('description', 'like', "%{$query}%");
             })
-            ->paginate(20);
+            ->paginate(10);
 
         return response()->json($products);
     }
@@ -363,21 +376,56 @@ return response()->json(
         $sortOrder = $request->input('sort_order', 'desc');
         $query->orderBy($sortBy, $sortOrder);
 
-        $products = $query->paginate(20);
+        $products = $query->paginate(100);
 
         return response()->json($products);
     }
 
     // Produits par sous-catégorie
-    public function bySubCategory($subCategoryId)
-    {
-        $products = Product::with(['category', 'merchant', 'images'])
-            ->where('status', 'approved')
-            ->where('sub_category_id', $subCategoryId)
-            ->paginate(20);
+    // app/Http/Controllers/API/ProductController.php
 
-        return response()->json($products);
+public function bySubCategory($subCategoryId)
+{
+    try {
+        Log::info('Tentative de récupération de sous-catégorie: ' . $subCategoryId);
+        
+        $subCategory = SubCategory::find($subCategoryId);
+        
+        if (!$subCategory) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Sous-catégorie non trouvée'
+            ], 404);
+        }
+
+        Log::info('Sous-catégorie trouvée: ' . $subCategory->name);
+
+        // ✅ CORRECTION : Ajouter le filtre status = 'approved'
+        $products = Product::with(['merchant', 'images', 'imageVariants'])
+            ->where('sub_category_id', $subCategoryId)
+            ->where('status', 'approved')  // ← AJOUTER CETTE LIGNE
+            ->get();
+
+        Log::info('Produits trouvés: ' . $products->count());
+
+        return response()->json([
+            'success' => true,
+            'sub_category' => $subCategory,
+            'products' => $products
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Erreur dans bySubCategory', [
+            'sub_category_id' => $subCategoryId,
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors du chargement des produits'
+        ], 500);
     }
+}
 
     // Produits similaires
     public function similar($productId)
