@@ -1,18 +1,18 @@
 <?php
+// app/Http/Controllers/API/GoogleAuthController.php
 
 namespace App\Http\Controllers\API;
 
-use App\Models\User;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
-use Illuminate\Support\Str;
 
 class GoogleAuthController extends Controller
 {
-    
     /**
-     * Rediriger vers Google pour l'authentification
+     * Rediriger vers Google
      */
     public function redirectToGoogle()
     {
@@ -22,122 +22,63 @@ class GoogleAuthController extends Controller
     }
 
     /**
-     * Callback après authentification Google
+     * Gérer le callback de Google
      */
     public function handleGoogleCallback()
     {
         try {
-            // Récupérer les informations de l'utilisateur depuis Google
             $googleUser = Socialite::driver('google')->stateless()->user();
+            
+            Log::info('🔵 Google user:', [
+                'id' => $googleUser->getId(),
+                'email' => $googleUser->getEmail(),
+                'name' => $googleUser->getName()
+            ]);
 
-            // Vérifier si l'utilisateur existe déjà avec cet email ou google_id
-            $user = User::where('email', $googleUser->getEmail())
-                ->orWhere('google_id', $googleUser->getId())
-                ->first();
+            // Vérifier si l'utilisateur existe déjà
+            $user = User::where('email', $googleUser->getEmail())->first();
 
-            if ($user) {
-                // Mettre à jour le google_id si nécessaire
-                if (!$user->google_id) {
-                    $user->google_id = $googleUser->getId();
-                    $user->save();
-                }
-            } else {
+            if (!$user) {
                 // Créer un nouvel utilisateur
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
-                    'avatar' => $googleUser->getAvatar(), // Utiliser l'avatar Google
-                    'phone' => '', // Peut être complété plus tard
-                    'email_verified_at' => now(),
-                ]);
-            }
-
-            // Créer un token d'authentification
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            // Construire l'URL de redirection vers le frontend avec les données
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = $frontendUrl . '/auth/callback?' . http_build_query([
-                'success' => 'true',
-                'token' => $token,
-                'user' => json_encode([
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'phone' => $user->phone,
-                    'avatar' => $user->avatar,
-                    'wallet_balance' => (float) $user->wallet_balance,
-                ])
-            ]);
-
-            return redirect($redirectUrl);
-
-        } catch (\Exception $e) {
-            \Log::error('Erreur authentification Google: ' . $e->getMessage());
-            
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            $redirectUrl = $frontendUrl . '/auth/callback?' . http_build_query([
-                'success' => 'false',
-                'error' => 'Erreur lors de l\'authentification Google'
-            ]);
-
-            return redirect($redirectUrl);
-        }
-    }
-
-    /**
-     * Version API du callback (retourne JSON au lieu de rediriger)
-     */
-    public function handleGoogleCallbackApi()
-    {
-        try {
-            $googleUser = Socialite::driver('google')->stateless()->user();
-
-            $user = User::where('email', $googleUser->getEmail())
-                ->orWhere('google_id', $googleUser->getId())
-                ->first();
-
-            if ($user) {
-                if (!$user->google_id) {
-                    $user->google_id = $googleUser->getId();
-                    $user->save();
-                }
-            } else {
-                $user = User::create([
-                    'name' => $googleUser->getName(),
-                    'email' => $googleUser->getEmail(),
-                    'google_id' => $googleUser->getId(),
                     'avatar' => $googleUser->getAvatar(),
-                    'phone' => '',
-                    'email_verified_at' => now(),
+                    'password' => bcrypt(uniqid()), // Mot de passe aléatoire
+                    'role' => 'client',
+                    'email_verified_at' => now(), // Google emails sont vérifiés
                 ]);
+                
+                Log::info('✅ Nouvel utilisateur créé via Google', ['user_id' => $user->id]);
+            } else {
+                // Mettre à jour le google_id si nécessaire
+                if (!$user->google_id) {
+                    $user->update(['google_id' => $googleUser->getId()]);
+                }
+                Log::info('✅ Utilisateur existant connecté via Google', ['user_id' => $user->id]);
             }
 
-            $token = $user->createToken('auth_token')->plainTextToken;
+            // Générer un token API
+            $token = $user->createToken('google-token')->plainTextToken;
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Authentification Google réussie',
-                'data' => [
-                    'user' => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                        'email' => $user->email,
-                        'phone' => $user->phone,
-                        'avatar' => $user->avatar,
-                        'wallet_balance' => (float) $user->wallet_balance,
-                    ],
-                    'token' => $token
-                ]
-            ]);
+            // Rediriger vers le frontend avec le token
+            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+            return redirect("{$frontendUrl}/auth/google-callback?token={$token}&user=" . urlencode(json_encode([
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'avatar' => $user->avatar,
+                'role' => $user->role,
+            ])));
 
         } catch (\Exception $e) {
-            \Log::error('Erreur authentification Google API: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de l\'authentification Google'
-            ], 500);
+            Log::error('❌ Erreur Google auth:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return redirect(config('app.frontend_url') . '/auth/login?error=google_auth_failed');
         }
     }
 }
