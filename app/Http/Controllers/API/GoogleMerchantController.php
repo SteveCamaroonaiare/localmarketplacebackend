@@ -70,7 +70,7 @@ class GoogleMerchantController extends Controller
                 if ($user->role !== 'merchant') {
                     DB::rollBack();
                     
-                    $frontendUrl = config('FRONTEND_URL', 'http://localhost:3000');
+                    $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
                     return redirect("{$frontendUrl}/merchant/login?error=" . urlencode("Cet email est déjà utilisé comme client. Veuillez utiliser un autre compte Google."));
                 }
                 
@@ -112,7 +112,7 @@ class GoogleMerchantController extends Controller
             ];
 
             // Déterminer la redirection
-            $frontendUrl = config('FRONTEND_URL', 'http://localhost:3000');
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
             
             // ✅ REDIRECTION INTELLIGENTE
             if (!$merchant->shop_name) {
@@ -139,7 +139,7 @@ class GoogleMerchantController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             
-            $frontendUrl = config('FRONTEND_URL', 'http://localhost:3000');
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
             return redirect("{$frontendUrl}/merchant/login?error=google_auth_failed");
         }
     }
