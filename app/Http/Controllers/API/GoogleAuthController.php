@@ -63,7 +63,7 @@ class GoogleAuthController extends Controller
             $token = $user->createToken('google-token')->plainTextToken;
 
             // Rediriger vers le frontend avec le token
-            $frontendUrl = config('app.frontend_url', 'http://localhost:3000');
+            $frontendUrl = config('FRONTEND_URL', 'http://localhost:3000');
             return redirect("{$frontendUrl}/auth/google-callback?token={$token}&user=" . urlencode(json_encode([
                 'id' => $user->id,
                 'name' => $user->name,
@@ -78,7 +78,7 @@ class GoogleAuthController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
             
-            return redirect(config('app.frontend_url') . '/auth/login?error=google_auth_failed');
+            return redirect(config('FRONTEND_URL') . '/auth/login?error=google_auth_failed');
         }
     }
 }
