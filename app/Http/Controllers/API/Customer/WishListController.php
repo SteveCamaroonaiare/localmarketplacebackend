@@ -9,7 +9,7 @@ use App\Models\Wishlist;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
-class WishlistController extends Controller
+class WishListController extends Controller
 {
     /**
      * Afficher la wishlist de l'utilisateur
