@@ -602,51 +602,74 @@ class MerchantProductController extends Controller
     }
 
 
-    public function stockAlerts(Request $request)
-    {
-        try {
-            $user = $request->user();
-            
-            $merchant = Merchant::where('user_id', $user->id)
-                ->orWhere('email', $user->email)
-                ->first();
+    // app/Http/Controllers/API/MerchantProductController.php
 
-            if (!$merchant) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Merchant non trouvé'
-                ], 404);
-            }
+public function stockAlerts(Request $request)
+{
+    try {
+        $user = $request->user();
+        
+        $merchant = Merchant::where('user_id', $user->id)
+            ->orWhere('email', $user->email)
+            ->first();
 
-            // Produits en rupture de stock
-            $outOfStock = Product::with('images')
-                ->where('merchant_id', $merchant->id)
-                ->where('stock_quantity', 0)
-                ->orWhere('is_in_stock', false)
-                ->get();
-
-            // Produits avec stock faible (≤ 5)
-            $lowStock = Product::with('images')
-                ->where('merchant_id', $merchant->id)
-                ->where('stock_quantity', '>', 0)
-                ->where('stock_quantity', '<=', 5)
-                ->get();
-
-            return response()->json([
-                'success' => true,
-                'out_of_stock' => $outOfStock,
-                'low_stock' => $lowStock,
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('❌ Erreur alertes stock', [
-                'error' => $e->getMessage()
-            ]);
-
+        if (!$merchant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération'
-            ], 500);
+                'message' => 'Merchant non trouvé'
+            ], 404);
         }
+
+        // Récupérer tous les produits avec leurs variantes et tailles
+        $products = Product::with(['images', 'imageVariants.sizes'])
+            ->where('merchant_id', $merchant->id)
+            ->get();
+
+        $outOfStock = [];
+        $lowStock = [];
+
+        foreach ($products as $product) {
+            // Vérifier le stock global
+            if ($product->stock_quantity == 0) {
+                $outOfStock[] = $product;
+                continue;
+            }
+            
+            // Vérifier le stock faible global
+            if ($product->stock_quantity <= 5 && $product->stock_quantity > 0) {
+                $lowStock[] = $product;
+                continue;
+            }
+            
+            // Vérifier les variantes individuellement (optionnel)
+            foreach ($product->imageVariants as $variant) {
+                if ($variant->stock_quantity == 0) {
+                    $outOfStock[] = $product;
+                    break;
+                }
+                if ($variant->stock_quantity <= 5 && $variant->stock_quantity > 0) {
+                    $lowStock[] = $product;
+                    break;
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'out_of_stock' => array_values(array_unique($outOfStock, SORT_REGULAR)),
+            'low_stock' => array_values(array_unique($lowStock, SORT_REGULAR)),
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur alertes stock', [
+            'error' => $e->getMessage()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de la récupération'
+        ], 500);
     }
+}
+
 }

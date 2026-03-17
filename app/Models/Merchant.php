@@ -129,4 +129,15 @@ public function getConversations()
             'total_products' => $this->products()->count(),
         ];
     }
+    // app/Models/Merchant.php
+
+public function isAdmin()
+{
+    // Un marchand n'est généralement pas admin
+    // Retournez false ou adaptez selon votre logique
+    return false;
+    
+    // Ou si vous avez un champ is_admin dans la table merchants
+    // return $this->is_admin == true;
+}
 }

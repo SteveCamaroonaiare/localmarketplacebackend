@@ -77,6 +77,7 @@ Route::get('/subcategories/{id}/products', [ProductController::class, 'bySubCate
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 // Dans routes/api.php
+
 Route::get('/products/{id}/variant', [ProductController::class, 'getVariant']);
 
 // Recherche et filtres
