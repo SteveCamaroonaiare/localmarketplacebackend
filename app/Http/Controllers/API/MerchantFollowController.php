@@ -1,10 +1,9 @@
 <?php
+// app/Http/Controllers/API/MerchantFollowController.php
 
 namespace App\Http\Controllers\API;
 
 use App\Models\User;
-use App\Models\Merchant;
-
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Log;
@@ -23,14 +22,14 @@ class MerchantFollowController extends Controller
                 ], 401);
             }
 
-            // ✅ Récupérer l'utilisateur (marchand)
-            $merchant = User::findOrFail($merchantId);
+            // ✅ Récupérer le marchand (qui est un User)
+            $merchant = User::find($merchantId);
             
-            // ✅ Vérifier que c'est bien un marchand
-            if (!$merchant->is_merchant) {
+            if (!$merchant || !$merchant->is_merchant) {
                 return response()->json([
-                    'error' => 'Cet utilisateur n\'est pas un marchand'
-                ], 400);
+                    'error' => 'Marchand non trouvé',
+                    'merchant_id' => $merchantId
+                ], 404);
             }
 
             // Vérifier si l'utilisateur suit déjà ce marchand
@@ -45,8 +44,9 @@ class MerchantFollowController extends Controller
                     ->where('user_id', $user->id)
                     ->where('merchant_id', $merchantId)
                     ->delete();
-                $action = 'unfollowed';
                 $newIsFollowing = false;
+                $action = 'unfollowed';
+                $message = 'Vous ne suivez plus ce vendeur';
             } else {
                 // Follow
                 DB::table('merchant_followers')->insert([
@@ -55,16 +55,16 @@ class MerchantFollowController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-                $action = 'followed';
                 $newIsFollowing = true;
+                $action = 'followed';
+                $message = 'Vous suivez maintenant ce vendeur';
             }
 
-            // Compter les followers
             $followersCount = DB::table('merchant_followers')
                 ->where('merchant_id', $merchantId)
                 ->count();
 
-            Log::info('📌 Action follow', [
+            Log::info('📌 Follow action', [
                 'user_id' => $user->id,
                 'merchant_id' => $merchantId,
                 'action' => $action,
@@ -75,7 +75,8 @@ class MerchantFollowController extends Controller
                 'success' => true,
                 'action' => $action,
                 'is_following' => $newIsFollowing,
-                'followers_count' => $followersCount
+                'followers_count' => $followersCount,
+                'message' => $message
             ]);
 
         } catch (\Exception $e) {
@@ -105,7 +106,8 @@ class MerchantFollowController extends Controller
             if (!$merchant || !$merchant->is_merchant) {
                 return response()->json([
                     'is_following' => false,
-                    'followers_count' => 0
+                    'followers_count' => 0,
+                    'merchant_exists' => false
                 ]);
             }
 

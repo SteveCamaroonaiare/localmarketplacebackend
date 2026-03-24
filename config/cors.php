@@ -19,8 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'http://127.0.0.1:3000'],
-
+'allowed_origins' => [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://13.60.84.126.nip.io',
+    'https://localmarketplace.vercel.app',
+],
     'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
