@@ -8,7 +8,7 @@ use App\Models\Merchant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Log;
 class AdminMerchantController extends Controller
 {
     /**
@@ -17,8 +17,8 @@ class AdminMerchantController extends Controller
     public function pendingMerchants()
     {
         try {
-            $merchants = Merchant::with('user')
-                ->where('is_verified', false)
+            $merchants = User::where('is_merchant', true)
+               ->where('merchant_status', 'pending')
                 ->orderBy('created_at', 'desc')
                 ->paginate(10);
 
@@ -36,88 +36,144 @@ class AdminMerchantController extends Controller
         }
     }
 
+    
     /**
-     * Approuver un merchant
-     */
-    public function approveMerchant(Request $request, $id)
-    {
-        try {
-            DB::beginTransaction();
+ * Approuver un merchant
+ */
+public function approveMerchant(Request $request, $id)
+{
+    try {
+        DB::beginTransaction();
 
-            $merchant = Merchant::find($id);
-
-            if (!$merchant) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Merchant non trouvé'
-                ], 404);
-            }
-
-            $admin = $request->user();
-
-            $merchant->update([
-                'is_verified' => true,
-                'verified_at' => now(),
-                'verified_by' => $admin->id,
-            ]);
-
-            // Mettre à jour le rôle de l'utilisateur
-            $user = $merchant->user;
-            if ($user) {
-                $user->update(['role' => 'merchant']);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Merchant approuvé avec succès',
-                'merchant' => $merchant
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+        // ✅ Récupérer l'utilisateur directement
+        $user = User::find($id);
+        
+        if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'approbation du merchant'
-            ], 500);
+                'message' => 'Utilisateur non trouvé'
+            ], 404);
         }
-    }
 
-    /**
-     * Rejeter un merchant
-     */
-    public function rejectMerchant(Request $request, $id)
-    {
-        try {
-            $request->validate([
-                'rejection_reason' => 'required|string|min:10|max:500'
-            ]);
-
-            $merchant = Merchant::find($id);
-
-            if (!$merchant) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Merchant non trouvé'
-                ], 404);
-            }
-
-            // Ici vous pourriez archiver le merchant ou le supprimer
-            // Pour l'instant on le laisse en attente
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Merchant rejeté avec succès'
-            ]);
-
-        } catch (\Exception $e) {
+        // ✅ Vérifier que c'est bien un marchand
+        if (!$user->is_merchant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors du rejet du merchant'
-            ], 500);
+                'message' => 'Cet utilisateur n\'est pas un marchand'
+            ], 400);
         }
+
+        $admin = $request->user();
+
+        // ✅ Mettre à jour l'utilisateur
+        $user->update([
+            'merchant_status' => 'approved',
+            'is_verified' => true,
+            'verified_at' => now(),
+            'verified_by' => $admin->id,
+        ]);
+
+        DB::commit();
+
+        Log::info('✅ Marchand approuvé', [
+            'user_id' => $user->id,
+            'shop_name' => $user->shop_name,
+            'admin_id' => $admin->id
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Marchand approuvé avec succès',
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'shop_name' => $user->shop_name,
+                'status' => $user->merchant_status,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('❌ Erreur approbation marchand', [
+            'error' => $e->getMessage(),
+            'user_id' => $id
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de l\'approbation: ' . $e->getMessage()
+        ], 500);
     }
+}
+
+/**
+ * Rejeter un merchant
+ */
+public function rejectMerchant(Request $request, $id)
+{
+    try {
+        $request->validate([
+            'reason' => 'required|string|min:10|max:500'
+        ]);
+
+        // ✅ Récupérer l'utilisateur directement
+        $user = User::find($id);
+        
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Utilisateur non trouvé'
+            ], 404);
+        }
+
+        // ✅ Vérifier que c'est bien un marchand
+        if (!$user->is_merchant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cet utilisateur n\'est pas un marchand'
+            ], 400);
+        }
+
+        $admin = $request->user();
+
+        // ✅ Mettre à jour l'utilisateur
+        $user->update([
+            'merchant_status' => 'rejected',
+            'is_verified' => false,
+            'rejection_reason' => $request->reason,
+            'rejected_at' => now(),
+            'rejected_by' => $admin->id,
+        ]);
+
+        Log::info('❌ Marchand rejeté', [
+            'user_id' => $user->id,
+            'shop_name' => $user->shop_name,
+            'reason' => $request->reason,
+            'admin_id' => $admin->id
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Marchand rejeté avec succès',
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'shop_name' => $user->shop_name,
+                'status' => $user->merchant_status,
+                'rejection_reason' => $user->rejection_reason,
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('❌ Erreur rejet marchand', [
+            'error' => $e->getMessage(),
+            'user_id' => $id
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors du rejet: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     /**
      * Statistiques des merchants
@@ -126,12 +182,13 @@ class AdminMerchantController extends Controller
     {
         try {
             $stats = [
-                'total_merchants' => Merchant::count(),
-                'verified_merchants' => Merchant::where('is_verified', true)->count(),
-                'pending_merchants' => Merchant::where('is_verified', false)->count(),
-                'active_merchants' => Merchant::where('is_verified', true)
-                    ->has('products', '>', 0)
-                    ->count(),
+                'total_merchants' => User::where('is_merchant', true)->count(),
+                'verified_merchants' => User::where('is_merchant', true)
+                    ->where('merchant_status', 'approved')->count(),
+                'pending_merchants' => User::where('is_merchant', true)
+                    ->where('merchant_status', 'pending')->count(),
+                'active_merchants' => User::where('is_merchant', true)
+                    ->has('products')->count(),
                 'top_merchants' => Merchant::withCount('products')
                     ->orderBy('products_count', 'desc')
                     ->take(5)
@@ -169,30 +226,48 @@ class AdminMerchantController extends Controller
     public function deactivateMerchant($id)
     {
         try {
-            $merchant = Merchant::find($id);
-
-            if (!$merchant) {
+            $user = User::find($id);
+            
+            if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Merchant non trouvé'
+                    'message' => 'Utilisateur non trouvé'
                 ], 404);
             }
 
-            $merchant->update(['is_verified' => false]);
+            if (!$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cet utilisateur n\'est pas un marchand'
+                ], 400);
+            }
 
-            // Désactiver tous les produits du merchant
-            $merchant->products()->update(['is_active' => false]);
+            $user->update([
+                'merchant_status' => 'inactive',
+                'is_verified' => false,
+            ]);
+
+            Log::info('⚠️ Marchand désactivé', [
+                'user_id' => $user->id,
+                'shop_name' => $user->shop_name
+            ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Merchant désactivé avec succès'
+                'message' => 'Marchand désactivé avec succès'
             ]);
 
         } catch (\Exception $e) {
+            Log::error('❌ Erreur désactivation marchand', [
+                'error' => $e->getMessage(),
+                'user_id' => $id
+            ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la désactivation du merchant'
+                'message' => 'Erreur lors de la désactivation'
             ], 500);
         }
     }
+    
+    
 }

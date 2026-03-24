@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Product;
 use App\Models\Order;
 use App\Models\Message;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -29,21 +30,20 @@ class ConversationController extends Controller
                 'user_id' => $user->id,
             ]);
 
+            // ✅ Récupérer les conversations où l'utilisateur est client OU marchand
             $conversations = Conversation::with([
-                    'customer:id,name,email,avatar',
-                    'merchant:id,name,logo,user_id,shop_name,phone',
-                    'product:id,name',
-                    'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
-                    'latestMessage'
-                ])
-                ->where(function($query) use ($user) {
-                    $query->where('customer_id', $user->id)
-                          ->orWhereHas('merchant', function($q) use ($user) {
-                              $q->where('user_id', $user->id);
-                          });
-                })
-                ->orderBy('last_message_at', 'desc')
-                ->get();
+                'customer:id,name,email,avatar',
+                'merchant:id,name,shop_name,email,avatar', // ✅ merchant est maintenant User
+                'product:id,name',
+                'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
+                'latestMessage'
+            ])
+            ->where(function($query) use ($user) {
+                $query->where('customer_id', $user->id)
+                      ->orWhere('merchant_id', $user->id); // ✅ directement l'ID de l'utilisateur
+            })
+            ->orderBy('last_message_at', 'desc')
+            ->get();
 
             Log::info('✅ Conversations trouvées', [
                 'count' => $conversations->count()
@@ -70,8 +70,7 @@ class ConversationController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des conversations',
-                'error' => $e->getMessage()
+                'message' => 'Erreur lors de la récupération des conversations: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -82,9 +81,9 @@ class ConversationController extends Controller
         try {
             $user = auth()->user();
             
-            // Vérifier l'accès
+            // ✅ Vérifier l'accès (customer_id ou merchant_id = user_id)
             $hasAccess = $conversation->customer_id === $user->id || 
-                        ($conversation->merchant && $conversation->merchant->user_id === $user->id);
+                         $conversation->merchant_id === $user->id;
             
             if (!$hasAccess) {
                 return response()->json([
@@ -93,15 +92,15 @@ class ConversationController extends Controller
                 ], 403);
             }
 
-             $conversation->load([
-            'customer:id,name,email,avatar',
-            'merchant:id,name,logo,user_id,shop_name,phone',
-            'product:id,name',
-            'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
-            'order.items', //
-            'order.items.product.images',
-            'messages'
-        ]);
+            $conversation->load([
+                'customer:id,name,email,avatar',
+                'merchant:id,name,shop_name,email,avatar,phone', // ✅ merchant est User
+                'product:id,name',
+                'order:id,order_number,status,total_price,customer_name,customer_phone,shipping_address,shipping_city,payment_method',
+                'order.items',
+                'order.items.product.images',
+                'messages'
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -115,7 +114,7 @@ class ConversationController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'affichage de la conversation'
+                'message' => 'Erreur lors de l\'affichage de la conversation: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -132,13 +131,14 @@ class ConversationController extends Controller
             $user = $request->user();
             
             $productId = $request->product_id;
+            $merchantId = null;
             
             if ($request->product_id) {
                 $product = Product::findOrFail($request->product_id);
-                $merchantId = $product->merchant_id;
+                $merchantId = $product->merchant_id; // ✅ déjà user_id
             } elseif ($request->order_id) {
                 $order = Order::with('items.product')->findOrFail($request->order_id);
-                $merchantId = $order->merchant_id;
+                $merchantId = $order->merchant_id; // ✅ déjà user_id
                 
                 if (!$productId && $order->items->isNotEmpty()) {
                     $productId = $order->items->first()->product_id;
@@ -163,13 +163,14 @@ class ConversationController extends Controller
                     'product_id' => $productId,
                     'order_id' => $request->order_id,
                     'customer_id' => $user->id,
-                    'merchant_id' => $merchantId,
+                    'merchant_id' => $merchantId, // ✅ user_id
                     'last_message_at' => now(),
                 ]);
                 
                 Log::info('✅ Conversation créée', [
                     'conversation_id' => $conversation->id,
                     'product_id' => $productId,
+                    'merchant_id' => $merchantId
                 ]);
             }
 
@@ -177,7 +178,7 @@ class ConversationController extends Controller
                 'success' => true,
                 'data' => $conversation->load([
                     'customer:id,name,email,avatar',
-                    'merchant:id,name,logo,shop_name,phone',
+                    'merchant:id,name,shop_name,email,avatar,phone',
                     'product:id,name',
                     'order:id,order_number'
                 ])
@@ -190,44 +191,48 @@ class ConversationController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la création de la conversation'
+                'message' => 'Erreur lors de la création de la conversation: ' . $e->getMessage()
             ], 500);
         }
     }
-    // app/Http/Controllers/API/ConversationController.php
 
-public function migrateGuest(Request $request)
-{
-    try {
-        $user = $request->user();
-        $conversationIds = $request->input('conversation_ids', []);
+    // Migrer les conversations guest
+    public function migrateGuest(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $conversationIds = $request->input('conversation_ids', []);
 
-        if (empty($conversationIds)) {
+            if (empty($conversationIds)) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Aucune conversation à migrer'
+                ]);
+            }
+
+            $updated = Conversation::whereIn('id', $conversationIds)
+                ->whereNull('customer_id')
+                ->update(['customer_id' => $user->id]);
+
+            Log::info('✅ Conversations migrées', [
+                'count' => $updated,
+                'user_id' => $user->id
+            ]);
+
             return response()->json([
                 'success' => true,
-                'message' => 'Aucune conversation à migrer'
+                'message' => "{$updated} conversation(s) migrée(s) avec succès"
             ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur migration conversations guest', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la migration'
+            ], 500);
         }
-
-        // Mettre à jour les conversations guest pour les lier à l'utilisateur connecté
-        Conversation::whereIn('id', $conversationIds)
-            ->whereNull('customer_id')
-            ->update(['customer_id' => $user->id]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Conversations migrées avec succès'
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Erreur migration conversations guest', [
-            'error' => $e->getMessage()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Erreur lors de la migration'
-        ], 500);
     }
-}
 }

@@ -22,45 +22,81 @@ public function index(Request $request)
 {
     try {
         $user = $request->user();
+        
+        Log::info('🔍 Début chargement produits');
+        
+        // ✅ Version simplifiée pour tester
+        $products = Product::with([
+            'merchant:id,name,shop_name,email,phone,country',
+            'department',
+            'images'
+        ])
+        ->where('status', 'approved')
+        ->orderBy('created_at', 'desc')
+        ->get();
 
-        $products = Product::with(['department', 'merchant.followers', 'images'])
-            ->where('status', 'approved')
-            ->get()
-            ->map(function ($product) use ($user) {
+        Log::info('✅ Produits trouvés', ['count' => $products->count()]);
 
-                // ✅ getProductImage() gère les 2 cas (seeder + upload réel)
-                return [
-                    'id'              => $product->id,
-                    'name'            => $product->name,
-                    'price'           => $product->price,
-                    'original_price'  => $product->original_price,
-                    'image'           => $this->getProductImage($product), // ✅ fix
-                    'rating'          => $product->rating,
-                    'reviews'         => $product->reviews,
-                    'merchant_id'     => $product->merchant_id,
-                    'seller'          => $product->merchant
-                                            ? ($product->merchant->shop_name ?? $product->merchant->name)
-                                            : null,
-                    'location'        => $product->location
-                                            ?? ($product->merchant->shop_address ?? null),
-                    'department_slug' => optional($product->department)->slug,
-                    'is_following'    => $user && $product->merchant
-                                            ? $product->merchant->isFollowedBy($user)
-                                            : false,
-                    'followers_count' => $product->merchant
-                                            ? $product->merchant->followers->count()
-                                            : 0,
-                ];
-            });
+        $formattedProducts = $products->map(function ($product) use ($user) {
+            // Image du produit
+            $imageUrl = null;
+            if ($product->images && $product->images->count() > 0) {
+                $imagePath = $product->images->first()->image_path;
+                $imageUrl = asset('storage/' . $imagePath);
+            }
+            
+            return [
+                'id'              => $product->id,
+                'name'            => $product->name,
+                'price'           => (float)$product->price,
+                'original_price'  => $product->original_price ? (float)$product->original_price : null,
+                'image'           => $imageUrl,
+                'rating'          => $product->rating ?? 0,
+                'reviews'         => $product->reviews ?? 0,
+                'merchant_id'     => $product->merchant_id,
+                'seller'          => $product->merchant 
+                                        ? ($product->merchant->shop_name ?? $product->merchant->name)
+                                        : null,
+                'location'        => $product->merchant ? $product->merchant->country : null,
+                'department_slug' => optional($product->department)->slug,
+            ];
+        });
 
-        return response()->json($products);
+        return response()->json($formattedProducts);
 
     } catch (\Exception $e) {
+        Log::error('❌ Erreur liste produits', [
+            'error' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => $e->getFile()
+        ]);
+
         return response()->json([
-            'error'   => 'Erreur lors du chargement des produits',
-            'message' => $e->getMessage()
+            'success' => false,
+            'message' => $e->getMessage(),
+            'line' => $e->getLine(),
+            'file' => basename($e->getFile())
         ], 500);
     }
+}
+
+// ✅ Fonction helper pour vérifier si l'utilisateur suit un marchand
+private function isUserFollowingMerchant($user, $merchantId)
+{
+    if (!$user) return false;
+    
+    return DB::table('merchant_followers')
+        ->where('user_id', $user->id)
+        ->where('merchant_id', $merchantId)
+        ->exists();
+}
+
+// ✅ Fonction helper pour compter les followers
+private function getMerchantFollowersCount($merchantId)
+{
+    return DB::table('merchant_followers')
+        ->where('merchant_id', $merchantId)
+        ->count();
 }
 
 // ✅ getProductImage() — gère seeder ET produits réels

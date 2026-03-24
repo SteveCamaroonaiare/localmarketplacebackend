@@ -62,7 +62,7 @@ class Product extends Model
     // Relations
     public function merchant()
 {
-    return $this->belongsTo(Merchant::class, 'merchant_id', 'id');
+    return $this->belongsTo(User::class, 'merchant_id');
 }
 
     public function category()

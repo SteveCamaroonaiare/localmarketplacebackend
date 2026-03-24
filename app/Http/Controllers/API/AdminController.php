@@ -24,7 +24,7 @@ class AdminController extends Controller
         try {
             // ✅ Statistiques générales
             $totalUsers = User::count();
-            $totalMerchants = Merchant::count();
+$totalMerchants = User::where('is_merchant', true)->count();  // ✅ Nouveau
             $totalOrders = Order::count();
             $totalProducts = Product::count();
 
@@ -33,14 +33,16 @@ class AdminController extends Controller
                 ->whereMonth('created_at', now()->month)
                 ->count();
             
-            $newMerchantsThisMonth = Merchant::whereYear('created_at', now()->year)
-                ->whereMonth('created_at', now()->month)
-                ->count();
+            $newMerchantsThisMonth = User::where('is_merchant', true)
+    ->whereYear('created_at', now()->year)
+    ->whereMonth('created_at', now()->month)
+    ->count();  // ✅
 
             // Merchants en attente
-            $pendingMerchants = Merchant::where('is_verified', false)
-                ->orWhere('is_verified', null)
-                ->count();
+           $pendingMerchants = User::where('is_merchant', true)
+    ->where('merchant_status', 'pending')
+    ->count();  // ✅
+
 
             // Produits en attente
             $pendingProducts = Product::where('status', 'pending')->count();
@@ -63,8 +65,10 @@ class AdminController extends Controller
             $thisMonthCommission = $thisMonthRevenue * 0.03;
 
             // Taux d'approbation merchants
-            $approvedMerchants = Merchant::where('is_verified', true)->count();
-            $approvalRate = $totalMerchants > 0 
+$approvedMerchants = User::where('is_merchant', true)
+    ->where('merchant_status', 'approved')
+    ->count();  // ✅        
+        $approvalRate = $totalMerchants > 0 
                 ? round(($approvedMerchants / $totalMerchants) * 100, 1) 
                 : 0;
 
@@ -124,11 +128,9 @@ class AdminController extends Controller
     public function pendingMerchants()
     {
         try {
-            $merchants = Merchant::with('user:id,name,email')
-                ->where(function($query) {
-                    $query->where('is_verified', false)
-                          ->orWhereNull('is_verified');
-                })
+
+            $merchants = User::where('is_merchant', true)
+                ->where('merchant_status', 'pending')
                 ->orderBy('created_at', 'desc')
                 ->paginate(20);
 
@@ -155,9 +157,10 @@ class AdminController extends Controller
     public function approveMerchant($id)
     {
         try {
-            $merchant = Merchant::findOrFail($id);
-            $merchant->is_verified = true;
-            $merchant->save();
+            $user = User::findOrFail($id);
+            $user->merchant_status = 'approved';
+            $user->is_verified = true;
+            $user->save(); 
 
             Log::info('✅ Merchant approuvé', [
                 'merchant_id' => $id,
@@ -192,10 +195,10 @@ class AdminController extends Controller
                 'reason' => 'required|string|max:500',
             ]);
 
-            $merchant = Merchant::findOrFail($id);
-            $merchant->is_verified = false;
-            $merchant->rejection_reason = $request->reason;
-            $merchant->save();
+            $user = User::findOrFail($id);
+            $user->merchant_status = 'rejected';
+            $user->rejection_reason = $request->reason;
+            $user->save();
 
             Log::info('❌ Merchant rejeté', [
                 'merchant_id' => $id,
@@ -226,25 +229,26 @@ class AdminController extends Controller
     public function merchants(Request $request)
     {
         try {
-            $query = Merchant::with('user:id,name,email');
+            $query = User::where('is_merchant', true);  // ✅
 
-            // Filtrer par statut
-            if ($request->has('status')) {
-                if ($request->status === 'verified') {
-                    $query->where('is_verified', true);
-                } elseif ($request->status === 'pending') {
-                    $query->where('is_verified', false);
-                }
+             // Filtrer par statut
+        if ($request->has('status')) {
+            if ($request->status === 'approved') {
+                $query->where('merchant_status', 'approved');
+            } elseif ($request->status === 'pending') {
+                $query->where('merchant_status', 'pending');
+            } elseif ($request->status === 'rejected') {
+                $query->where('merchant_status', 'rejected');
             }
-
+        }
             // Recherche
             if ($request->has('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('shop_name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
-                });
+                $q->where('name', 'like', "%{$search}%")
+                ->orWhere('shop_name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%");
+            });
             }
 
             $merchants = $query->orderBy('created_at', 'desc')
@@ -282,8 +286,7 @@ class AdminController extends Controller
     public function users(Request $request)
     {
         try {
-            $query = User::select('id', 'name', 'email', 'role', 'created_at');
-
+          $query = User::select('id', 'name', 'email', 'is_customer', 'is_merchant', 'created_at');
             // Recherche
             if ($request->has('search')) {
                 $search = $request->search;
@@ -307,6 +310,14 @@ class AdminController extends Controller
                 $user->total_spent = Order::where('user_id', $user->id)
                     ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
                     ->sum('total_price');
+                    // ✅ Ajouter le type d'utilisateur pour le frontend
+            if ($user->is_merchant) {
+                $user->user_type = 'merchant';
+                $user->shop_name = $user->shop_name;
+                $user->merchant_status = $user->merchant_status;
+            } else {
+                $user->user_type = 'customer';
+            }
             }
 
             return response()->json([
@@ -422,16 +433,32 @@ class AdminController extends Controller
     /**
      * Détails d'une commande
      */
-    public function orderDetails($id)
+   public function orderDetails($id)
 {
     try {
+        // ✅ Vérifier que l'utilisateur est admin
+        $user = auth()->user();
+        
+        if (!$user->isAdmin()) {
+            Log::warning('⚠️ Tentative d\'accès non autorisé aux détails de commande', [
+                'user_id' => $user?->id,
+                'user_role' => $user?->role,
+                'admin_role' => $user?->admin_role
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès non autorisé'
+            ], 403);
+        }
+
         $order = Order::with([
             'items.product.images',
-            'merchant:id,name,shop_name,email,phone,user_id',
+            'merchant:id,name,shop_name,email,phone', // ✅ user_id n'est plus nécessaire
             'user:id,name,email'
         ])->findOrFail($id);
 
-        // ✅ Enrichir les items avec les URLs complètes des images
+        // Enrichir les items avec les URLs complètes des images
         foreach ($order->items as $item) {
             if ($item->product && $item->product->images && $item->product->images->count() > 0) {
                 $primaryImage = $item->product->images->where('is_primary', true)->first();
@@ -439,12 +466,10 @@ class AdminController extends Controller
                     ? $primaryImage->image_path 
                     : $item->product->images->first()->image_path;
                 
-                // Ajouter l'URL complète à l'item
                 $item->product_image_url = asset('storage/' . $imagePath);
                 $item->product_image_thumb = asset('storage/' . $imagePath);
             }
             
-            // Parser les attributs pour faciliter l'affichage
             if ($item->attributes) {
                 $item->parsed_attributes = is_string($item->attributes) 
                     ? json_decode($item->attributes, true) 
@@ -477,7 +502,6 @@ class AdminController extends Controller
             }
         }
 
-        // Commission
         $commissionRate = 0.03;
         $order->commission = $order->total_price * $commissionRate;
 
@@ -492,7 +516,8 @@ class AdminController extends Controller
     } catch (\Exception $e) {
         Log::error('❌ Erreur détails commande admin', [
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+            'trace' => $e->getTraceAsString(),
+            'order_id' => $id
         ]);
 
         return response()->json([
@@ -501,7 +526,6 @@ class AdminController extends Controller
         ], 404);
     }
 }
-
     /**
      * Commandes récentes (pour le dashboard)
      */
@@ -589,8 +613,7 @@ class AdminController extends Controller
     public function merchantDetails($id)
     {
         try {
-            $merchant = Merchant::with('user:id,name,email')
-                ->findOrFail($id);
+                $user = User::findOrFail($id); 
 
             // Stats du merchant
             $merchant->total_products = Product::where('merchant_id', $merchant->id)->count();

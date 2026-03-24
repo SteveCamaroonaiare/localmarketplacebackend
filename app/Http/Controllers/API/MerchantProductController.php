@@ -28,10 +28,20 @@ class MerchantProductController extends Controller
     public function index(Request $request)
     {
         try {
-            $merchant = $request->user();
             
-            $query = Product::where('merchant_id', $merchant->id)
-                ->with(['category', 'subCategory', 'images', 'colorVariants', 'sizes'])
+            $user = $request->user();
+        
+        // ✅ Vérifier que l'utilisateur est bien un marchand
+        if (!$user->is_merchant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé'
+            ], 403);
+        }
+
+        // ✅ Utiliser directement l'ID de l'utilisateur comme merchant_id
+        $query = Product::where('merchant_id', $user->id)
+                ->with(['category','subCategory', 'images'])
                 ->orderBy('created_at', 'desc');
 
             // Filtrer par statut si demandé
@@ -58,7 +68,7 @@ class MerchantProductController extends Controller
     /**
      * Créer un nouveau produit
      */
-   public function store(Request $request)
+ public function store(Request $request)
 {
     try {
         Log::info('🟡 Tentative de création produit', [
@@ -66,6 +76,7 @@ class MerchantProductController extends Controller
             'has_files' => $request->hasFile('images'),
             'all_data' => $request->all()
         ]);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'required|string',
@@ -82,7 +93,7 @@ class MerchantProductController extends Controller
             'images.*.price' => 'required|numeric|min:0',
             'images.*.original_price' => 'nullable|numeric|min:0',
             'images.*.stock_quantity' => 'required|integer|min:0',
-            'images.*.sizes' => 'nullable|array', // Tableau de tailles
+            'images.*.sizes' => 'nullable|array',
             'images.*.sizes.*.name' => 'required|string',
             'images.*.sizes.*.stock' => 'required|integer|min:0',
         ]);
@@ -91,13 +102,19 @@ class MerchantProductController extends Controller
 
         $user = $request->user();
         
-        $merchant = Merchant::where('user_id', $user->id)
-            ->orWhere('email', $user->email)
-            ->first();
-
-        if (!$merchant) {
-            throw new \Exception('Merchant non trouvé');
+        // ✅ Vérifier que l'utilisateur est bien un marchand
+        if (!$user->is_merchant) {
+            throw new \Exception('Vous n\'êtes pas autorisé à créer des produits');
         }
+
+        // ✅ Utiliser directement l'ID de l'utilisateur (plus de $merchant)
+        $merchantId = $user->id;
+
+        Log::info('✅ Marchand authentifié', [
+            'user_id' => $user->id,
+            'merchant_id' => $merchantId,
+            'is_merchant' => $user->is_merchant
+        ]);
 
         // Prix de base = prix minimum des images
         $basePrice = collect($validated['images'])->min('price');
@@ -105,7 +122,7 @@ class MerchantProductController extends Controller
 
         // Créer le produit
         $product = Product::create([
-            'merchant_id' => $merchant->id,
+            'merchant_id' => $merchantId,
             'name' => $validated['name'],
             'slug' => Str::slug($validated['name']) . '-' . time(),
             'description' => $validated['description'],
@@ -117,6 +134,11 @@ class MerchantProductController extends Controller
             'payment_on_delivery' => $validated['payment_on_delivery'] ?? false,
             'status' => 'pending',
             'is_in_stock' => true,
+        ]);
+
+        Log::info('✅ Produit créé', [
+            'product_id' => $product->id,
+            'merchant_id' => $merchantId
         ]);
 
         // Traiter chaque image comme une variante
@@ -158,7 +180,7 @@ class MerchantProductController extends Controller
 
         Log::info('✅ Produit créé avec variantes d\'images', [
             'product_id' => $product->id,
-            'merchant_id' => $merchant->id,
+            'merchant_id' => $merchantId,
             'images_count' => count($validated['images']),
         ]);
 
@@ -226,22 +248,18 @@ class MerchantProductController extends Controller
  public function destroy(Request $request, $id)
 {
     try {
-        $user = $request->user();
+       $user = $request->user();
         
-        // Trouver le merchant
-        $merchant = \App\Models\Merchant::where('user_id', $user->id)
-            ->orWhere('email', $user->email)
-            ->first();
-        
-        if (!$merchant) {
+       
+        if (!$user->is_merchant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Merchant non trouvé'
-            ], 404);
+                'message' => 'Non autorisé'
+            ], 403);
         }
 
         // Vérifier que le produit appartient au merchant
-        $product = Product::where('merchant_id', $merchant->id)
+        $product = Product::where('merchant_id', $user->id) 
             ->with(['images', 'colorVariants', 'sizes'])
             ->findOrFail($id);
 
@@ -331,19 +349,15 @@ class MerchantProductController extends Controller
         try {
             $user = $request->user();
 
-            $merchant = Merchant::where('user_id', $user->id)
-                ->orWhere('email', $user->email)
-                ->first();
+        if (!$user->is_merchant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Non autorisé'
+            ], 403);
+        }
 
-            if (!$merchant) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Merchant non trouvé'
-                ], 404);
-            }
-
-            $product = Product::where('merchant_id', $merchant->id)->findOrFail($id);
-
+        $product = Product::where('merchant_id', $user->id)  // ✅ Utiliser $user->id
+            ->findOrFail($id);
             DB::beginTransaction();
 
             // Validation des données
@@ -607,22 +621,18 @@ class MerchantProductController extends Controller
 public function stockAlerts(Request $request)
 {
     try {
-        $user = $request->user();
+       $user = $request->user();
         
-        $merchant = Merchant::where('user_id', $user->id)
-            ->orWhere('email', $user->email)
-            ->first();
-
-        if (!$merchant) {
+        if (!$user->is_merchant) {
             return response()->json([
                 'success' => false,
-                'message' => 'Merchant non trouvé'
-            ], 404);
+                'message' => 'Non autorisé'
+            ], 403);
         }
 
         // Récupérer tous les produits avec leurs variantes et tailles
         $products = Product::with(['images', 'imageVariants.sizes'])
-            ->where('merchant_id', $merchant->id)
+            ->where('merchant_id', $user->id)  // ✅ Utiliser $user->id
             ->get();
 
         $outOfStock = [];

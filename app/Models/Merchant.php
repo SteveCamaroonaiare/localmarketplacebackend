@@ -37,6 +37,8 @@ class Merchant extends Authenticatable
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+                'password' => 'hashed',
+
     ];
 /**
  * 👥 Users qui suivent ce marchand
@@ -84,7 +86,21 @@ public function user()
 {
     return $this->belongsTo(User::class);
 }
+/**
+     * La boutique est-elle complète ?
+     */
+    public function hasShop(): bool
+    {
+        return !is_null($this->shop_name);
+    }
 
+    /**
+     * A-t-il un abonnement actif ?
+     */
+    public function hasActiveSubscription(): bool
+    {
+        return !is_null($this->subscription_id);
+    }
 // Helper pour récupérer les conversations d'un marchand
 public function getConversations()
 {

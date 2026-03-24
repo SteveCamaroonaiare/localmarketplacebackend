@@ -27,7 +27,7 @@ class SuperAdminController extends Controller
             // Stats générales
             $stats = [
                 'total_admins' => User::where('role', 'admin')->count(),
-                'total_merchants' => Merchant::count(),
+        'total_merchants' => User::where('is_merchant', true)->count(),
                 'total_orders' => Order::count(),
                 'total_revenue' => Order::whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
                     ->sum('total_price'),
@@ -68,10 +68,17 @@ class SuperAdminController extends Controller
             $month = $request->get('month', now()->month);
             $year = $request->get('year', now()->year);
 
-            $merchants = Merchant::where('is_verified', true)->get();
+            $merchants = User::where('is_merchant', true)
+                        ->where('merchant_status', 'approved')
+                        ->get();
             $payouts = [];
 
             foreach ($merchants as $merchant) {
+                $orders = Order::where('merchant_id', $merchant->id)
+                ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                ->whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->get();
                 // Récupérer l'abonnement actif
                 $subscription = MerchantSubscription::with('plan')
                     ->where('merchant_id', $merchant->id)
@@ -258,11 +265,14 @@ class SuperAdminController extends Controller
 
             $audit = [
                 'merchants' => [
-                    'total' => Merchant::count(),
-                    'verified' => Merchant::where('is_verified', true)->count(),
-                    'pending' => Merchant::where('is_verified', false)->count(),
-                    'new_this_period' => Merchant::where('created_at', '>=', $startDate)->count(),
-                ],
+                'total' => User::where('is_merchant', true)->count(),
+                'verified' => User::where('is_merchant', true)
+                    ->where('merchant_status', 'approved')->count(),
+                'pending' => User::where('is_merchant', true)
+                    ->where('merchant_status', 'pending')->count(),
+                'new_this_period' => User::where('is_merchant', true)
+                    ->where('created_at', '>=', $startDate)->count(),
+            ],
                 'products' => [
                     'total' => Product::count(),
                     'approved' => Product::where('status', 'approved')->count(),

@@ -34,9 +34,9 @@ class Conversation extends Model
     }
 
     public function merchant()
-    {
-        return $this->belongsTo(Merchant::class);
-    }
+{
+    return $this->belongsTo(User::class, 'merchant_id');
+}
     public function product()
     {
         return $this->belongsTo(Product::class);

@@ -18,8 +18,13 @@ class User extends Authenticatable
         'avatar',
         'password',
         'wallet_balance',
+        'is_customer',
+         'is_merchant',
+         'shop_name', 'shop_address',
+         'country', 
+         'shop_logo', 'shop_category',
+        'payment_method', 'payment_account', 'merchant_status',
         'google_id',
-        'role',
         'admin_role', 
         'is_active_admin',
         'admin_since',
@@ -32,20 +37,23 @@ class User extends Authenticatable
     ];
 
     protected $casts = [
+        'is_customer' => 'boolean',
+        'is_merchant' => 'boolean',
         'email_verified_at' => 'datetime',
         'wallet_balance' => 'decimal:2',
         'is_active_admin' => 'boolean',
         'admin_since' => 'datetime',
+
     ];
 /**
  * 🏪 Marchands suivis par l'utilisateur
  */
 public function followedMerchants()
 {
-    return $this->belongsToMany(
-        Merchant::class,
-        'merchant_followers'
-    )->withTimestamps();
+    return $this->belongsToMany(User::class, 'merchant_followers', 'user_id', 'merchant_id')
+        ->wherePivot('user_id', $this->id)
+        ->where('is_merchant', true);
+    
 }
 
     // ========== RELATIONS EXISTANTES ==========
@@ -99,17 +107,46 @@ public function followedMerchants()
             });
     }
 
-    // Helper pour récupérer l'utilisateur marchand associé
-    public function isMerchant()
+     public function isCustomer(): bool
     {
-        return $this->merchant()->exists();
+        return $this->is_customer;
+    }
+    
+    public function isMerchant(): bool
+    {
+        return $this->is_merchant && $this->merchant()->exists();
+    }
+    
+    public function canBeMerchant(): bool
+    {
+        return $this->is_merchant;
     }
 
     public function getMerchantId()
     {
         return $this->merchant ? $this->merchant->id : null;
     }
+/**
+     * Obtenir le rôle actif (selon la session ou défaut)
+     */
+    public function getActiveRole(): string
+    {
+        if ($this->isMerchant() && session('active_role') === 'merchant') {
+            return 'merchant';
+        }
+        return 'customer';
+    }
 
+    /**
+     * Obtenir le profil selon le rôle actif
+     */
+    public function getActiveProfile()
+    {
+        if ($this->getActiveRole() === 'merchant') {
+            return $this->merchant;
+        }
+        return $this;
+    }
     // ========== SCOPES ==========
     public function scopeAdmins($query)
     {
@@ -127,15 +164,16 @@ public function followedMerchants()
     }
 
     // ========== MÉTHODES HELPERS ==========
-    public function isSuperAdmin()
-    {
-        return $this->admin_role === 'super_admin' && $this->is_active_admin;
-    }
+ // app/Models/User.php
+public function isAdmin()
+{
+    return $this->admin_role === 'admin' || $this->admin_role === 'super_admin';
+}
 
-    public function isAdmin()
-    {
-        return !is_null($this->admin_role) && $this->is_active_admin;
-    }
+public function isSuperAdmin()
+{
+    return $this->admin_role === 'super_admin';
+}
 
     public function canManageAdmins()
     {
@@ -154,5 +192,9 @@ public function followedMerchants()
             return asset('storage/' . $this->avatar);
         }
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&color=7F9CF5&background=EBF4FF';
+    }
+    public function hasShop(): bool
+    {
+        return !is_null($this->shop_name);
     }
 }

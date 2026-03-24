@@ -39,38 +39,67 @@ class GoogleAuthController extends Controller
             $user = User::where('email', $googleUser->getEmail())->first();
 
             if (!$user) {
-                // Créer un nouvel utilisateur
+                // ✅ Créer un nouvel utilisateur avec Option 1
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $googleUser->getEmail(),
                     'google_id' => $googleUser->getId(),
                     'avatar' => $googleUser->getAvatar(),
-                    'password' => bcrypt(uniqid()), // Mot de passe aléatoire
-                    'role' => 'client',
-                    'email_verified_at' => now(), // Google emails sont vérifiés
+                    'password' => bcrypt(uniqid()),
+                    'is_customer' => true,      // ✅ Client par défaut
+                    'is_merchant' => false,     // ❌ Pas marchand
+                    'wallet_balance' => 0,
+                    'email_verified_at' => now(),
                 ]);
                 
-                Log::info('✅ Nouvel utilisateur créé via Google', ['user_id' => $user->id]);
+                Log::info('✅ Nouvel utilisateur créé via Google', [
+                    'user_id' => $user->id,
+                    'is_customer' => $user->is_customer,
+                    'is_merchant' => $user->is_merchant
+                ]);
             } else {
-                // Mettre à jour le google_id si nécessaire
+                // ✅ Mettre à jour les champs Option 1 si nécessaire
+                $updateData = [];
+                
                 if (!$user->google_id) {
-                    $user->update(['google_id' => $googleUser->getId()]);
+                    $updateData['google_id'] = $googleUser->getId();
                 }
-                Log::info('✅ Utilisateur existant connecté via Google', ['user_id' => $user->id]);
+                if (!$user->avatar && $googleUser->getAvatar()) {
+                    $updateData['avatar'] = $googleUser->getAvatar();
+                }
+                if (empty($updateData)) {
+                    $updateData['updated_at'] = now();
+                }
+                
+                if (!empty($updateData)) {
+                    $user->update($updateData);
+                }
+                
+                Log::info('✅ Utilisateur existant connecté via Google', [
+                    'user_id' => $user->id,
+                    'is_customer' => $user->is_customer,
+                    'is_merchant' => $user->is_merchant
+                ]);
             }
 
             // Générer un token API
             $token = $user->createToken('google-token')->plainTextToken;
 
-            // Rediriger vers le frontend avec le token
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
-            return redirect("{$frontendUrl}/auth/google-callback?token={$token}&user=" . urlencode(json_encode([
+            // ✅ Structure pour Option 1
+            $userData = [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'avatar' => $user->avatar,
-                'role' => $user->role,
-            ])));
+                'phone' => $user->phone,
+                'is_customer' => (bool)$user->is_customer,
+                'is_merchant' => (bool)$user->is_merchant,
+                'has_shop' => $user->hasShop(),
+            ];
+
+            // Rediriger vers le frontend avec le token
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+            return redirect("{$frontendUrl}/auth/google-callback?token={$token}&user=" . urlencode(json_encode($userData)));
 
         } catch (\Exception $e) {
             Log::error('❌ Erreur Google auth:', [

@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Models\User;
 use App\Models\Merchant;
+
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class MerchantFollowController extends Controller
 {
@@ -19,29 +23,67 @@ class MerchantFollowController extends Controller
                 ], 401);
             }
 
-            $merchant = Merchant::findOrFail($merchantId);
+            // ✅ Récupérer l'utilisateur (marchand)
+            $merchant = User::findOrFail($merchantId);
+            
+            // ✅ Vérifier que c'est bien un marchand
+            if (!$merchant->is_merchant) {
+                return response()->json([
+                    'error' => 'Cet utilisateur n\'est pas un marchand'
+                ], 400);
+            }
 
             // Vérifier si l'utilisateur suit déjà ce marchand
-            $isFollowing = $merchant->followers()->where('user_id', $user->id)->exists();
+            $isFollowing = DB::table('merchant_followers')
+                ->where('user_id', $user->id)
+                ->where('merchant_id', $merchantId)
+                ->exists();
 
             if ($isFollowing) {
                 // Unfollow
-                $merchant->followers()->detach($user->id);
+                DB::table('merchant_followers')
+                    ->where('user_id', $user->id)
+                    ->where('merchant_id', $merchantId)
+                    ->delete();
                 $action = 'unfollowed';
+                $newIsFollowing = false;
             } else {
                 // Follow
-                $merchant->followers()->attach($user->id);
+                DB::table('merchant_followers')->insert([
+                    'user_id' => $user->id,
+                    'merchant_id' => $merchantId,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
                 $action = 'followed';
+                $newIsFollowing = true;
             }
+
+            // Compter les followers
+            $followersCount = DB::table('merchant_followers')
+                ->where('merchant_id', $merchantId)
+                ->count();
+
+            Log::info('📌 Action follow', [
+                'user_id' => $user->id,
+                'merchant_id' => $merchantId,
+                'action' => $action,
+                'followers_count' => $followersCount
+            ]);
 
             return response()->json([
                 'success' => true,
                 'action' => $action,
-                'is_following' => !$isFollowing,
-                'followers_count' => $merchant->followers()->count()
+                'is_following' => $newIsFollowing,
+                'followers_count' => $followersCount
             ]);
 
         } catch (\Exception $e) {
+            Log::error('❌ Erreur toggleFollow', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'error' => 'Erreur lors de l\'action',
                 'message' => $e->getMessage()
@@ -55,21 +97,41 @@ class MerchantFollowController extends Controller
             $user = $request->user();
             
             if (!$user) {
-                return response()->json(['is_following' => false]);
+                return response()->json(['is_following' => false, 'followers_count' => 0]);
             }
 
-            $merchant = Merchant::findOrFail($merchantId);
-            $isFollowing = $merchant->followers()->where('user_id', $user->id)->exists();
+            // ✅ Vérifier que le marchand existe
+            $merchant = User::find($merchantId);
+            if (!$merchant || !$merchant->is_merchant) {
+                return response()->json([
+                    'is_following' => false,
+                    'followers_count' => 0
+                ]);
+            }
+
+            $isFollowing = DB::table('merchant_followers')
+                ->where('user_id', $user->id)
+                ->where('merchant_id', $merchantId)
+                ->exists();
+
+            $followersCount = DB::table('merchant_followers')
+                ->where('merchant_id', $merchantId)
+                ->count();
 
             return response()->json([
                 'is_following' => $isFollowing,
-                'followers_count' => $merchant->followers()->count()
+                'followers_count' => $followersCount
             ]);
 
         } catch (\Exception $e) {
+            Log::error('❌ Erreur checkFollowStatus', [
+                'error' => $e->getMessage()
+            ]);
+
             return response()->json([
-                'error' => 'Erreur',
-                'message' => $e->getMessage()
+                'is_following' => false,
+                'followers_count' => 0,
+                'error' => $e->getMessage()
             ], 500);
         }
     }

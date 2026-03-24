@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Models\User;
+use App\Models\Merchant;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Hash;
@@ -30,7 +31,7 @@ class AuthController extends Controller
                 'email' => 'required|string|email|max:255|unique:users',
                 'phone' => 'required|string|max:20|unique:users',
                 'password' => 'required|string|min:8|confirmed',
-                'role' => 'required|in:client,merchant',
+                'register_as' => 'required|in:customer,merchant,client',
             ]);
 
             if ($validator->fails()) {
@@ -44,6 +45,9 @@ class AuthController extends Controller
             }
 
             Log::info('✅ Validation passée');
+   // ✅ Déterminer le rôle
+            $isMerchant = in_array($request->register_as, ['merchant', 'Merchant', 'MERCHANT']);
+            $isCustomer = !$isMerchant; // ✅ Si c'est client, il est client
 
             // Vérifier si la table users a les bons champs
             $userData = [
@@ -51,8 +55,9 @@ class AuthController extends Controller
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'password' => Hash::make($request->password),
-                'role' => $request->role,
-                'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($request->name) . '&color=FFFFFF&background=FFEAA7',
+                  'is_customer' => $isCustomer,
+                'is_merchant' => $isMerchant,  
+              'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($request->name) . '&color=FFFFFF&background=FFEAA7',
                 'wallet_balance' => 0.00,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -62,6 +67,23 @@ class AuthController extends Controller
 
             $user = User::create($userData);
             Log::info('✅ Utilisateur créé - ID: ' . $user->id);
+
+             // Si marchand, créer le profil marchand
+            if ($isMerchant) {
+                Merchant::create([
+                    'user_id' => $user->id,
+                    'name' => $request->name,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                    'password' => Hash::make($request->password),
+                    'status' => 'pending',
+                ]);
+                
+                // Définir le rôle actif comme marchand
+                session(['active_role' => 'merchant']);
+                                Log::info('✅ Profil marchand créé');
+
+            }
 
             $token = $user->createToken('auth_token')->plainTextToken;
             Log::info('✅ Token créé');
@@ -74,16 +96,19 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Utilisateur créé avec succès',
                 'data' => [
+        'token' => $token,
+
                     'user' => [
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
                         'phone' => $user->phone,
-                        'role' => $user->role,
+                       'is_customer' => (bool)$user->is_customer,
+                        'is_merchant' => (bool)$user->is_merchant,
+                        'has_shop' => $user->merchant ? !is_null($user->merchant->shop_name) : false,
                         'avatar' => $user->avatar,
-                        'wallet_balance' => $user->wallet_balance,
+                        'wallet_balance' => (float)$user->wallet_balance,
                     ],
-                    'token' => $token
                 ]
             ], 201);
 
@@ -128,9 +153,12 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-                    if (!$user) {
-            return response()->json(['message' => 'Utilisateur introuvable'], 404);
-        }
+                   if (!$user || !Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email ou mot de passe incorrect'
+                ], 401);
+            }
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -143,6 +171,9 @@ class AuthController extends Controller
                         'name' => $user->name,
                         'email' => $user->email,
                         'phone' => $user->phone,
+                         'is_customer' => (bool)$user->is_customer,
+                'is_merchant' => (bool)$user->is_merchant,
+                'has_shop' => $user->hasShop(),
                         'avatar' => $user->avatar,
                         'wallet_balance' => $user->wallet_balance,
                     ],
@@ -158,6 +189,48 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Changer de rôle actif
+     */
+    public function switchRole(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $newRole = $request->role; // 'customer' ou 'merchant'
+
+            if ($newRole === 'merchant' && !$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Vous n\'êtes pas marchand'
+                ], 403);
+            }
+
+            session(['active_role' => $newRole]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rôle changé avec succès',
+                'data' => [
+                    'active_role' => $newRole,
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'is_customer' => $user->is_customer,
+                        'is_merchant' => $user->is_merchant,
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors du changement de rôle'
+            ], 500);
+        }
+    }
+
 
     // 🔹 Profil
     public function profile()
@@ -202,8 +275,12 @@ class AuthController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
-                    'avatar' => $user->avatar,
-                    'wallet_balance' => (float) $user->wallet_balance,
+
+                     'is_customer' => (bool)$user->is_customer,
+                        'is_merchant' => (bool)$user->is_merchant,
+                        'has_shop' => $user->hasShop(),
+                        'avatar' => $user->avatar,
+                        'wallet_balance' => (float)$user->wallet_balance,
                 ]
             ]
         ]);

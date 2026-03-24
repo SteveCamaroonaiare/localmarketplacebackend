@@ -21,20 +21,15 @@ class CheckSubscription
         }
 
         // Récupérer le merchant
-        $merchant = Merchant::where('user_id', $user->id)
-            ->orWhere('email', $user->email)
-            ->first();
-
-        if (!$merchant) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Merchant non trouvé'
-            ], 404);
+        if (!$user->is_merchant) {
+            return response()->json(['success' => false, 'message' => 'Non autorisé'], 403);
         }
 
+        // Utiliser directement $user
+        $merchantId = $user->id;
         // Vérifier si le merchant a un abonnement actif
         $subscription = MerchantSubscription::with('plan')
-            ->where('merchant_id', $merchant->id)
+            ->where('merchant_id', $merchantId)
             ->where('status', 'active')
             ->where('ends_at', '>', now())
             ->first();

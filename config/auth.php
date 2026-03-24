@@ -28,10 +28,7 @@ return [
             'expire' => 60,
             'throttle' => 60,
         ],
-        'merchants' => [
-        'driver' => 'eloquent',
-        'model' => App\Models\Merchant::class,
-    ],
+        
     ],
 
     'password_timeout' => 10800,

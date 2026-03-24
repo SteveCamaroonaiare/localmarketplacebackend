@@ -36,12 +36,14 @@ use App\Http\Controllers\API\MerchantPublicController;
    use App\Http\Controllers\API\Customer\WishListController;
    use App\Http\Controllers\API\CheckoutController;
    use App\Http\Controllers\API\StockController;
+      use App\Http\Controllers\API\ShopController;
+
 
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
-|--------------------------------------------------------------------------
+|-----------/or---------------------------------------------------------------
 |
 | Here is where you can register API routes for your application. These
 | routes are loaded by the RouteServiceProvider and all of them will
@@ -295,6 +297,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::get('/user', [AuthController::class, 'user'])->middleware('auth:sanctum');
+      Route::post('/switch-role', [AuthController::class, 'switchRole'])->middleware('auth:sanctum');
 });
 
  Route::post('/register', [AuthController::class, 'register']);
@@ -321,7 +324,10 @@ Route::prefix('merchant')->group(function () {
 Route::get('/auth/google/merchant', [GoogleMerchantController::class, 'redirectToGoogle']);
 Route::get('/auth/google/merchant/callback', [GoogleMerchantController::class, 'handleGoogleCallback']);
 
-
+// routes/api.php
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/merchant/create-shop', [ShopController::class, 'createShop']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::put('/update-profile', [MerchantAuthController::class, 'updateProfile']); // ✅
@@ -509,8 +515,8 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     // Gestion des merchants
 Route::get('/merchants', [AdminController::class, 'merchants']);
     Route::get('/merchants/pending', [AdminController::class, 'pendingMerchants']);
-    Route::post('/merchants/{id}/approve', [AdminController::class, 'approveMerchant']);
-    Route::post('/merchants/{id}/reject', [AdminController::class, 'rejectMerchant']);
+    Route::post('/merchants/{id}/approve', [AdminMerchantController::class, 'approveMerchant']);
+    Route::post('/merchants/{id}/reject', [AdminMerchantController::class, 'rejectMerchant']);
             Route::get('/stats', [AdminMerchantController::class, 'stats']);
 
         Route::post('/merchants/{id}/deactivate', [AdminMerchantController::class, 'deactivateMerchant']);

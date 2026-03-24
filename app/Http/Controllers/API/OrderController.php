@@ -71,6 +71,16 @@ class OrderController extends Controller
 public function store(Request $request)
 {
     try {
+                $user = $request->user();
+        
+        // ✅ Vérifier que l'utilisateur est client
+        if (!$user->is_customer) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Seuls les clients peuvent passer commande'
+            ], 403);
+        }
+
         Log::info('🟡 Tentative de création commande', $request->all());
 
         $validator = Validator::make($request->all(), [
@@ -289,8 +299,7 @@ $messageContent = "🎉 **NOUVELLE COMMANDE #{$order->order_number}**\n\n" .
                   "📦 **ARTICLES COMMANDÉS**\n\n" .
                   "{$productsList}\n\n" .
                   "════════════════════\n\n" .
-                  "💰 **RÉCAPITULATIF**\n" .
-                  "   Sous-total: " . number_format($order->subtotal, 0, ',', ' ') . " FCFA\n" ;
+                  "💰 **RÉCAPITULATIF**\n" ;
                //   "   Livraison: " . number_format($order->shipping_cost, 0, ',', ' ') . " FCFA\n";
                   
 // Ajouter la taxe si > 0
@@ -570,7 +579,7 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
     /**
      * Commandes d'un vendeur spécifique
      */
-  public function merchantOrders(Request $request)
+ public function merchantOrders(Request $request)
 {
     try {
         $user = auth()->user();
@@ -578,13 +587,12 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
         Log::info('👤 Utilisateur authentifié', [
             'user_id' => $user->id,
             'email' => $user->email,
+            'is_merchant' => $user->is_merchant,
         ]);
         
-        // ✅ Récupérer le merchant via user_id
-        $merchant = Merchant::where('user_id', $user->id)->first();
-        
-        if (!$merchant) {
-            Log::warning('⚠️ Merchant non trouvé pour cet utilisateur', [
+        // ✅ Vérifier que l'utilisateur est bien un marchand
+        if (!$user->is_merchant) {
+            Log::warning('⚠️ Utilisateur non marchand', [
                 'user_id' => $user->id,
             ]);
             
@@ -594,21 +602,21 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
             ], 403);
         }
 
-        Log::info('🏪 Merchant trouvé', [
-            'merchant_id' => $merchant->id,
-            'merchant_name' => $merchant->name,
+        Log::info('🏪 Utilisateur marchand', [
+            'user_id' => $user->id,
+            'shop_name' => $user->shop_name,
         ]);
 
-        $query = Order::with(['items.product', 'merchant'])
-            ->where('merchant_id', $merchant->id);
+        // ✅ Utiliser directement l'ID de l'utilisateur comme merchant_id
+        $query = Order::with(['items.product', 'user'])
+            ->where('merchant_id', $user->id);
 
         if ($request->has('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
         }
 
-        $orders = $query->orderBy('created_at', 'desc')
-            ->paginate(100);
-
+        $orders = $query->orderBy('created_at', 'desc')->get();
+        
         // Ajouter le compteur de messages non lus
         foreach ($orders as $order) {
             $conversation = Conversation::where('order_id', $order->id)->first();
@@ -647,116 +655,89 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
     /**
      * Statistiques des commandes (pour le dashboard)
      */
-    public function stats(Request $request)
-{
-    try {
-        $user = auth()->user();
-        
-        $merchant = Merchant::where('user_id', $user->id)->first();
-        
-        if (!$merchant) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Merchant non trouvé'
-            ], 404);
-        }
-
-        // ✅ Statistiques complètes
-        $totalOrders = Order::where('merchant_id', $merchant->id)->count();
-        
-        $pendingOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'pending')
-            ->count();
-        
-        $confirmedOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'confirmed')
-            ->count();
-        
-        $processingOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'processing')
-            ->count();
-        
-        $shippedOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'shipped')
-            ->count();
-        
-        $deliveredOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'delivered')
-            ->count();
-        
-        $cancelledOrders = Order::where('merchant_id', $merchant->id)
-            ->where('status', 'cancelled')
-            ->count();
-
-        // ✅ Revenus totaux (seulement commandes payées/confirmées/livrées)
-        $totalRevenue = Order::where('merchant_id', $merchant->id)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
-            ->whereIn('payment_status', ['paid', 'pending']) // On compte même si paiement en attente
-            ->sum('total_price');
-
-        // ✅ Revenus de ce mois
-        $thisMonthRevenue = Order::where('merchant_id', $merchant->id)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
-            ->whereYear('created_at', now()->year)
-            ->whereMonth('created_at', now()->month)
-            ->sum('total_price');
-
-        // ✅ Revenus d'aujourd'hui
-        $todayRevenue = Order::where('merchant_id', $merchant->id)
-            ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
-            ->whereDate('created_at', now()->toDateString())
-            ->sum('total_price');
-
-        // ✅ Commandes d'aujourd'hui
-        $todayOrders = Order::where('merchant_id', $merchant->id)
-            ->whereDate('created_at', now()->toDateString())
-            ->count();
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'total_orders' => $totalOrders,
-                'pending_orders' => $pendingOrders,
-                'confirmed_orders' => $confirmedOrders,
-                'processing_orders' => $processingOrders,
-                'shipped_orders' => $shippedOrders,
-                'delivered_orders' => $deliveredOrders,
-                'cancelled_orders' => $cancelledOrders,
-                'total_revenue' => $totalRevenue,
-                'this_month_revenue' => $thisMonthRevenue,
-                'today_revenue' => $todayRevenue,
-                'today_orders' => $todayOrders,
-            ]
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('❌ Erreur stats merchant', [
-            'error' => $e->getMessage()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Erreur lors de la récupération des statistiques'
-        ], 500);
-    }
-}
-
-    public function merchantOrderDetails($id)
+  public function stats(Request $request)
     {
         try {
             $user = auth()->user();
             
-            $order = Order::with([
-                'items.product.images',
-                'merchant',
-                'user' // Le client
-            ])
-            ->whereHas('merchant', function($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
-            ->findOrFail($id);
+            if (!$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Non autorisé'
+                ], 403);
+            }
 
-            // Charger la conversation associée
+            $merchantId = $user->id;  // ✅ Utiliser user->id
+
+            $totalOrders = Order::where('merchant_id', $merchantId)->count();
+            $pendingOrders = Order::where('merchant_id', $merchantId)->where('status', 'pending')->count();
+            $confirmedOrders = Order::where('merchant_id', $merchantId)->where('status', 'confirmed')->count();
+            $processingOrders = Order::where('merchant_id', $merchantId)->where('status', 'processing')->count();
+            $shippedOrders = Order::where('merchant_id', $merchantId)->where('status', 'shipped')->count();
+            $deliveredOrders = Order::where('merchant_id', $merchantId)->where('status', 'delivered')->count();
+            $cancelledOrders = Order::where('merchant_id', $merchantId)->where('status', 'cancelled')->count();
+
+            $totalRevenue = Order::where('merchant_id', $merchantId)
+                ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                ->sum('total_price');
+
+            $thisMonthRevenue = Order::where('merchant_id', $merchantId)
+                ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                ->whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->sum('total_price');
+
+            $todayRevenue = Order::where('merchant_id', $merchantId)
+                ->whereIn('status', ['confirmed', 'processing', 'shipped', 'delivered'])
+                ->whereDate('created_at', now()->toDateString())
+                ->sum('total_price');
+
+            $todayOrders = Order::where('merchant_id', $merchantId)
+                ->whereDate('created_at', now()->toDateString())
+                ->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_orders' => $totalOrders,
+                    'pending_orders' => $pendingOrders,
+                    'confirmed_orders' => $confirmedOrders,
+                    'processing_orders' => $processingOrders,
+                    'shipped_orders' => $shippedOrders,
+                    'delivered_orders' => $deliveredOrders,
+                    'cancelled_orders' => $cancelledOrders,
+                    'total_revenue' => $totalRevenue,
+                    'this_month_revenue' => $thisMonthRevenue,
+                    'today_revenue' => $todayRevenue,
+                    'today_orders' => $todayOrders,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur stats merchant', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération'
+            ], 500);
+        }
+    }
+
+     public function merchantOrderDetails($id)
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Non autorisé'
+                ], 403);
+            }
+
+            $order = Order::with(['items.product.images', 'user'])
+                ->where('merchant_id', $user->id)  // ✅ Vérifier que la commande appartient au marchand
+                ->findOrFail($id);
+
             $conversation = Conversation::with(['messages.sender'])
                 ->where('order_id', $order->id)
                 ->first();
@@ -773,81 +754,83 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
             ]);
 
         } catch (\Exception $e) {
-            Log::error('❌ Erreur détails commande merchant', [
-                'error' => $e->getMessage()
-            ]);
-
+            Log::error('❌ Erreur détails commande', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des détails'
-            ], 500);
+                'message' => 'Commande introuvable'
+            ], 404);
         }
     }
 
     /**
      * Récupérer la conversation d'une commande
-     */public function getOrderConversation($orderId)
-{
-    try {
-        $user = auth()->user();
-        
-        $order = Order::whereHas('merchant', function($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->findOrFail($orderId);
-
-        $conversation = Conversation::with([
-            'messages.sender:id,name,email',
-            'customer:id,name,email,avatar',
-            'order:id,order_number,customer_name,customer_phone,shipping_address,shipping_city',
-            'order.items' => function($query) {
-                $query->with(['product' => function($q) {
-                    $q->with(['images' => function($img) {
-                        $img->orderBy('is_primary', 'desc')->orderBy('sort_order');
-                    }]);
-                }]);
+     */
+      
+    public function getOrderConversation($orderId)
+    {
+        try {
+            $user = auth()->user();
+            
+            if (!$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Non autorisé'
+                ], 403);
             }
-        ])
-        ->where('order_id', $order->id)
-        ->firstOrFail();
 
-        // Marquer les messages du client comme lus
-        $conversation->messages()
-            ->where('sender_id', '!=', $user->id)
-            ->where('is_read', false)
-            ->update(['is_read' => true, 'read_at' => now()]);
+            $order = Order::where('merchant_id', $user->id)->findOrFail($orderId);
 
-        // Enrichir les items avec l'URL de l'image
-        if ($conversation->order && $conversation->order->items) {
-            foreach ($conversation->order->items as $item) {
-                if ($item->product && $item->product->images && $item->product->images->count() > 0) {
-                    $primaryImage = $item->product->images->where('is_primary', true)->first();
-                    $item->product_image_url = $primaryImage 
-                        ? asset('storage/' . $primaryImage->image_path)
-                        : asset('storage/' . $item->product->images->first()->image_path);
+            $conversation = Conversation::with([
+                'messages.sender:id,name,email',
+                'customer:id,name,email,avatar',
+                'order:id,order_number,customer_name,customer_phone,shipping_address,shipping_city',
+                'order.items' => function($query) {
+                    $query->with(['product' => function($q) {
+                        $q->with(['images' => function($img) {
+                            $img->orderBy('is_primary', 'desc')->orderBy('sort_order');
+                        }]);
+                    }]);
+                }
+            ])
+            ->where('order_id', $order->id)
+            ->firstOrFail();
+
+            // Marquer les messages du client comme lus
+            $conversation->messages()
+                ->where('sender_id', '!=', $user->id)
+                ->where('is_read', false)
+                ->update(['is_read' => true, 'read_at' => now()]);
+
+            // Enrichir les items avec l'URL de l'image
+            if ($conversation->order && $conversation->order->items) {
+                foreach ($conversation->order->items as $item) {
+                    if ($item->product && $item->product->images && $item->product->images->count() > 0) {
+                        $primaryImage = $item->product->images->where('is_primary', true)->first();
+                        $item->product_image_url = $primaryImage 
+                            ? asset('storage/' . $primaryImage->image_path)
+                            : asset('storage/' . $item->product->images->first()->image_path);
+                    }
                 }
             }
+
+            return response()->json([
+                'success' => true,
+                'data' => $conversation
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('❌ Erreur conversation commande', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Conversation introuvable'
+            ], 404);
         }
-
-        return response()->json([
-            'success' => true,
-            'data' => $conversation
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('❌ Erreur conversation commande', [
-            'error' => $e->getMessage()
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Conversation introuvable'
-        ], 404);
     }
-}
+
     /**
      * Envoyer un message au client depuis le dashboard
      */
-    public function sendMessageToCustomer(Request $request, $orderId)
+     public function sendMessageToCustomer(Request $request, $orderId)
     {
         try {
             $request->validate([
@@ -856,23 +839,25 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
 
             $user = auth()->user();
             
-            // Vérifier que c'est bien une commande du merchant
-            $order = Order::whereHas('merchant', function($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })->findOrFail($orderId);
+            if (!$user->is_merchant) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Non autorisé'
+                ], 403);
+            }
 
-            // Récupérer ou créer la conversation
+            $order = Order::where('merchant_id', $user->id)->findOrFail($orderId);
+
             $conversation = Conversation::firstOrCreate(
                 ['order_id' => $order->id],
                 [
                     'customer_id' => $order->user_id,
-                    'merchant_id' => $order->merchant_id,
+                    'merchant_id' => $user->id,  // ✅ Utiliser user->id
                     'product_id' => $order->items->first()->product_id ?? null,
                     'last_message_at' => now(),
                 ]
             );
 
-            // Créer le message
             $message = Message::create([
                 'conversation_id' => $conversation->id,
                 'sender_id' => $user->id,
@@ -881,17 +866,7 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
                 'is_read' => false,
             ]);
 
-            // Mettre à jour la conversation
-            $conversation->update([
-                'last_message_at' => now()
-            ]);
-
-            $message->load('sender:id,name,email');
-
-            Log::info('✅ Message merchant envoyé', [
-                'message_id' => $message->id,
-                'order_id' => $orderId,
-            ]);
+            $conversation->update(['last_message_at' => now()]);
 
             return response()->json([
                 'success' => true,
@@ -900,17 +875,15 @@ private function sendStatusUpdateMessage($order, $oldStatus, $newStatus)
             ], 201);
 
         } catch (\Exception $e) {
-            Log::error('❌ Erreur envoi message merchant', [
-                'error' => $e->getMessage(),
-                'order_id' => $orderId,
-            ]);
-
+            Log::error('❌ Erreur envoi message', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de l\'envoi du message'
+                'message' => 'Erreur lors de l\'envoi'
             ], 500);
         }
     }
+
+
 
 
      private function sendLowStockAlert($product)
